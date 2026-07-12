@@ -25,15 +25,15 @@ data:
 training:
   output_dir: ./checkpoints/vrsbench-stage1
   num_epochs: 3              # connector-only, ~30k images
-  per_device_batch_size: 4   # 3B frozen forward + large-vocab fp32 loss is heavier than the 1.5B run;
-                             # start at 4 (plan on a 40 GB+ GPU). Drop to 2 on 24 GB.
-  gradient_accumulation_steps: 32  # effective batch = 128
+  per_device_batch_size: 8   # ~27 GB VRAM on a 48 GB card (L40S / A6000). The 3B frozen forward +
+                             # large-vocab fp32 loss is the memory driver; drop to 4 on 40 GB, 2 on 24 GB.
+  gradient_accumulation_steps: 16  # effective batch = 128 (unchanged)
   learning_rate: 0.001       # connector-only
   warmup_ratio: 0.03
   weight_decay: 0.0
   max_grad_norm: 1.0
-  bf16: true                 # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series)
-  dataloader_num_workers: 8
+  bf16: true                 # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series, L40S)
+  dataloader_num_workers: 16   # feed the GPU on multi-core pods (e.g. 32 vCPUs); lower to 8 if CPU-bound
   logging_steps: 10
   save_steps: 100
   seed: 42
