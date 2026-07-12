@@ -151,12 +151,22 @@ class ImageSource:
             return PILImage.open(io.BytesIO(self._zip.read(entry)))
         raise RuntimeError("No image source configured (need --images-dir, --images-zip, or Hub download).")
 
+    def close(self) -> None:
+        if self._zip is not None:
+            self._zip.close()
+            self._zip = None
+
 
 def resolve_inputs(args) -> tuple:
-    """Return (train_json_path, ImageSource) — downloading from the Hub unless overridden."""
+    """Return (train_json_path, ImageSource, downloaded_zip_path). Downloads from the Hub unless overridden.
+
+    ``downloaded_zip_path`` is set only when this script fetched the image zip itself, so
+    ``--cleanup-zip`` never deletes a ``--images-zip`` the caller supplied.
+    """
     json_path = args.json_path
     images_zip = args.images_zip
     images_dir = args.images_dir
+    downloaded_zip = None
 
     need_download = json_path is None or (images_dir is None and images_zip is None and not args.no_images)
     if need_download:
@@ -168,11 +178,12 @@ def resolve_inputs(args) -> tuple:
         if images_dir is None and images_zip is None and not args.no_images:
             print(f"Downloading {IMAGES_ZIP_NAME} from {args.hf_id} (~8.4 GB, first run only) ...")
             images_zip = hf_hub_download(args.hf_id, IMAGES_ZIP_NAME, repo_type="dataset")
+            downloaded_zip = images_zip
 
     source = None
     if not args.no_images:
         source = ImageSource(images_dir=images_dir, images_zip=images_zip)
-    return json_path, source
+    return json_path, source, downloaded_zip
 
 
 def parse_args() -> argparse.Namespace:
@@ -204,6 +215,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--images-zip", default=None, help="Local Images_train.zip (skip download).")
     parser.add_argument("--images-dir", default=None, help="Local extracted images folder (skip zip).")
     parser.add_argument("--no-images", action="store_true", help="Emit JSON only; do not materialize images.")
+    parser.add_argument(
+        "--cleanup-zip",
+        action="store_true",
+        help="After extracting images, delete the downloaded Images_train.zip to reclaim ~8 GB of disk "
+        "(only affects a zip this script downloaded; a --images-zip / --images-dir you pass is left alone). "
+        "Note: a later re-run will re-download the archive.",
+    )
     parser.add_argument("--overwrite", action="store_true", help="Rebuild {split}.json if it exists.")
     return parser.parse_args()
 
@@ -222,7 +240,7 @@ def main() -> None:
 
     image_dir.mkdir(parents=True, exist_ok=True)
 
-    json_path, source = resolve_inputs(args)
+    json_path, source, downloaded_zip = resolve_inputs(args)
     print(f"Reading {json_path}")
     with open(json_path, "r", encoding="utf-8") as f:
         rows = json.load(f)
@@ -279,6 +297,18 @@ def main() -> None:
     if args.test_fraction > 0:
         with test_json.open("w", encoding="utf-8") as f:
             json.dump(test_records, f, ensure_ascii=False, indent=2)
+
+    if source is not None:
+        source.close()
+    if args.cleanup_zip and downloaded_zip:
+        # The referenced images are now extracted to images/, so the ~8 GB archive is dead weight.
+        for path in {downloaded_zip, os.path.realpath(downloaded_zip)}:
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except OSError as exc:
+                print(f"Could not delete {path}: {exc}")
+        print(f"Removed the downloaded {IMAGES_ZIP_NAME} (reclaimed ~8 GB of disk).")
 
     print("\nExport complete")
     print(f"Source images:   {len(image_bucket)} (train {train_images} / test {test_images})")

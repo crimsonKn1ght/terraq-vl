@@ -15,14 +15,18 @@ The repo already lives at `https://github.com/crimsonKn1ght/TerraQ-VL`. On the p
 ## 1. Create the pod
 
 - **Template:** "RunPod PyTorch 2.x" (CUDA + PyTorch preinstalled).
-- **GPU:** Qwen2.5-3B is heavier than the 1.5B backbone. Recommend **≥ 40 GB** — RTX 6000 Ada / A6000
-  (48 GB), A100 (40/80 GB). A **24 GB** card (RTX 3090 / 4090) can still do **Stage 1** if you drop
-  `per_device_batch_size` to 2 in `configs/pretrain_vrsbench.yaml` (and raise
-  `gradient_accumulation_steps` to keep the effective batch at 128). Training defaults to **bf16**, so
-  use an **Ampere-or-newer** GPU — **avoid T4 and V100**.
-- **Network Volume:** create one (e.g. **50 GB**) and attach it; it mounts at `/workspace`. This is
-  what makes the model downloads, the ~8.4 GB VRSBench image archive, and your checkpoints survive a
-  pod stop/terminate. The container disk is wiped on terminate.
+- **GPU:** Qwen2.5-3B is heavier than the 1.5B backbone. Recommend **≥ 40 GB** — **L40S (48 GB)**,
+  RTX 6000 Ada / A6000 (48 GB), A100 (40/80 GB). The **L40S** (Ada, 48 GB) is a great fit and runs the
+  default configs comfortably — you can even raise Stage-1 `per_device_batch_size` to 6–8 for speed. A
+  **24 GB** card (RTX 3090 / 4090) can still do **Stage 1** if you drop `per_device_batch_size` to 2 in
+  `configs/pretrain_vrsbench.yaml` (and raise `gradient_accumulation_steps` to keep the effective batch
+  at 128). Training defaults to **bf16**, so use an **Ampere-or-newer** GPU — **avoid T4 and V100**.
+- **Disk / Volume (important):** the small **container disk (e.g. 30 GB) is not enough** — the base
+  image plus Qwen2.5-3B (~6 GB), CLIP (~1.7 GB) and the ~8.4 GB VRSBench archive overflow it. Create a
+  **≥ 50 GB** network/volume disk at pod creation; it mounts at `/workspace`, keeps downloads and
+  checkpoints off the container disk, and (for a *network* volume) survives a stop/terminate. Clone the
+  repo into `/workspace` and keep `HF_HOME=/workspace/hf_cache` (the setup script does this and prints
+  `df -h` so you can confirm where space is going).
 
 ## 2. Clone into the volume and set up
 
@@ -47,10 +51,12 @@ bash scripts/runpod_train.sh
 `datasets/vrsbench_llava/{train.json,test.json,images/}` (caption **and** VQA turns, with a seeded 2%
 held-out test split). `runpod_train.sh` runs `train.py --config configs/pretrain_vrsbench.yaml`.
 
-> **Download note.** The first `runpod_setup.sh` (smoke or full) downloads `VRSBench_train.json`
-> (~65 MB) and `Images_train.zip` (~8.4 GB) into `HF_HOME` on the volume; only referenced images are
-> extracted, so `50` builds fast once the zip is present. CLIP and Qwen2.5-3B are public weights — no
-> Hugging Face token needed.
+> **Download / disk note.** The first `runpod_setup.sh` (smoke or full) downloads `VRSBench_train.json`
+> (~65 MB) and `Images_train.zip` (~8.4 GB) into `HF_HOME`; only referenced images are extracted (as
+> 384 px JPEGs) and the archive is then **deleted** (`--cleanup-zip`) to reclaim ~8 GB, leaving ~10 GB
+> of on-disk data total. Because the zip is removed, a **re-run re-downloads it** — so if disk is tight,
+> skip the smoke test and run the full build directly (the builder is already validated). CLIP and
+> Qwen2.5-3B are public weights — no Hugging Face token needed.
 
 ## 3. Watch it train
 
