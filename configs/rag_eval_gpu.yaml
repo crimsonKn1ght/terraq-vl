@@ -1,0 +1,50 @@
+# GPU run config for the medical-RAG ablation (real datasets + models).
+#
+# Use on a CUDA machine (e.g. RTX 3060). Datasets and corpus stream from Hugging Face and
+# are capped, so only what is needed downloads. The encoder / LLM / NLI weights download
+# once and are cached under ~/.cache/huggingface.
+#
+# IMPORTANT: meaningful generated answers require a TRAINED connector. With checkpoint null
+# the connector is random and EM/NLI will not be meaningful — the run still exercises the
+# whole pipeline end-to-end. Either train the connector first (python train.py ...) and set
+# model.checkpoint below, or swap model.config to a fully-trained medical VLM.
+
+model:
+  config: configs/pretrain_stage1.yaml
+  checkpoint: null                 # set to ./checkpoints/<run>/checkpoint-XXXX once trained
+  device: cuda
+  torch_dtype: bfloat16
+
+retrieval:
+  retrieval_mode: hybrid
+  top_k: 3
+  candidate_pool: 30
+  modality_weight: 0.5
+  text_encoder_id: pritamdeka/S-PubMedBert-MS-MARCO
+  visual_encoder_id: openai/clip-vit-large-patch14   # same vision tower as the VLM
+  cross_encoder_id: cross-encoder/ms-marco-MiniLM-L-6-v2
+  index_dir: ./rag_index
+  index_type: flat_ip
+
+corpus:
+  name: roco                       # verified open radiology corpus (eltorio/ROCO-radiology)
+  source: hf
+  local_path: ./data/corpus
+  max_pairs: 300                   # raise for a larger index (more download/compute)
+  modality: radiology
+
+eval:
+  benchmark: vqa_rad               # vqa_rad | path_vqa
+  split: test
+  num_samples: 50                  # raise toward full split (vqa_rad test ~451) for final numbers
+  modes: [no_retrieval, dense_visual, sparse_bm25, hybrid]
+  metrics: [exact_match, nli_consistency]
+  nli_model_id: roberta-large-mnli # swap for a MedNLI/SciNLI checkpoint for clinical text
+  output_dir: ./rag_results
+  max_context_chars: 700
+  max_new_tokens: 64
+
+phase3:
+  query_decomposition: false
+  adaptive_context_window: false
+  modality_aware_weighting: false

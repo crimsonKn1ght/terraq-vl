@@ -1,0 +1,51 @@
+# Stage-2 visual instruction tuning on VRSBench (remote sensing) with Qwen2.5-3B + LoRA.
+#
+# Continues training the Stage-1 connector AND fine-tunes the Qwen2.5-3B LLM with LoRA adapters
+# on the same caption + VQA data. The vision encoder stays frozen. Targets the Stage-1 ceiling
+# (fine-detail hallucination) by letting the LLM, not just the connector, learn from the pixels.
+#
+# Prereqs:
+#   1. Build the data (if not already): see configs/pretrain_vrsbench.yaml.
+#   2. Have a Stage-1 connector checkpoint (train.py with pretrain_vrsbench.yaml), then point
+#      stage1_checkpoint at it.
+# Then:
+#   python train.py --config configs/finetune_vrsbench_stage2.yaml
+vision_encoder:
+  model_name: openai/clip-vit-large-patch14
+  select_layer: -2
+  select_feature: patch
+language_model:
+  model_name: Qwen/Qwen2.5-3B-Instruct
+  torch_dtype: bfloat16
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    # Qwen2.5 attention + MLP projections (unchanged from the 1.5B model — same architecture family).
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+connector:
+  vision_hidden_size: 1024
+  llm_hidden_size: 2048      # Qwen2.5-3B hidden size (D_llm)
+# Warm-start the connector from the recommended Stage-1 final checkpoint (update the step number).
+stage1_checkpoint: ./checkpoints/vrsbench-stage1/checkpoint-XXXX
+data:
+  train_data_path: datasets/vrsbench_llava/train.json
+  image_dir: datasets/vrsbench_llava/images
+  max_length: 512            # +256 image tokens -> ~768 effective seq
+training:
+  stage: 2                   # connector + LoRA (Stage 1 = connector only)
+  output_dir: ./checkpoints/vrsbench-stage2
+  num_epochs: 1              # instruction-tuning convention (single pass over caption + VQA)
+  per_device_batch_size: 2   # 3B full-LLM backward pass is the memory driver; start at 2, raise if it fits
+  gradient_accumulation_steps: 32  # effective batch = 64
+  gradient_checkpointing: true     # required to fit the 3B LLM backward pass
+  learning_rate: 0.0002      # LoRA + connector
+  # connector_lr: 0.00005    # (optional) give the pretrained connector a lower LR than fresh LoRA
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  bf16: true                 # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series)
+  dataloader_num_workers: 8
+  logging_steps: 10
+  save_steps: 200
+  seed: 42

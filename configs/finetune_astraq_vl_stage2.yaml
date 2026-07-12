@@ -1,0 +1,51 @@
+# AstraQ-VL Stage-2 visual instruction tuning on AstroLLaVA_convos.
+#
+# Continues training the Stage-1 connector AND fine-tunes the Qwen LLM with LoRA adapters on the
+# same caption + QA data. The vision encoder stays frozen. This targets the Stage-1 ceiling
+# (fine-detail hallucination) by letting the LLM, not just the connector, learn from the pixels.
+#
+# Prereqs:
+#   1. Build the data (if not already): see configs/pretrain_astraq_vl.yaml.
+#   2. Have a Stage-1 connector checkpoint (train.py with pretrain_astraq_vl.yaml, or download
+#      the released grKnight/astraq-vl-stage1 bundle and point stage1_checkpoint at it).
+# Then:
+#   python train.py --config configs/finetune_astraq_vl_stage2.yaml
+vision_encoder:
+  model_name: openai/clip-vit-large-patch14
+  select_layer: -2
+  select_feature: patch
+language_model:
+  model_name: Qwen/Qwen2.5-1.5B-Instruct
+  torch_dtype: bfloat16
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.05
+    # Qwen2.5 attention + MLP projections.
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+connector:
+  vision_hidden_size: 1024
+  llm_hidden_size: 1536
+# Warm-start the connector from the recommended Stage-1 epoch-3 checkpoint.
+stage1_checkpoint: ./checkpoints/astraq-vl-stage1/checkpoint-3789
+data:
+  train_data_path: datasets/astrollava_llava/train.json
+  image_dir: datasets/astrollava_llava/images
+  max_length: 512          # +256 image tokens -> ~768 effective seq
+training:
+  stage: 2                 # connector + LoRA (Stage 1 = connector only)
+  output_dir: ./checkpoints/astraq-vl-stage2
+  num_epochs: 1            # instruction-tuning convention (single pass over caption + QA)
+  per_device_batch_size: 4 # full-LLM backward pass is the memory driver; start at 4, drop to 2 if OOM
+  gradient_accumulation_steps: 16  # effective batch = 64
+  gradient_checkpointing: true     # required to fit the LLM backward pass in ~48 GB
+  learning_rate: 0.0002    # LoRA + connector
+  # connector_lr: 0.00005  # (optional) give the pretrained connector a lower LR than fresh LoRA
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  bf16: true               # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series)
+  dataloader_num_workers: 8
+  logging_steps: 10
+  save_steps: 200
+  seed: 42

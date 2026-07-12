@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="580" viewBox="0 0 1120 580" role="img" aria-labelledby="title desc">
+  <title id="title">AstraQ-VL Stage 2 training flow</title>
+  <desc id="desc">Stage 2 warm-starts the Stage 1 connector, trains connector plus LoRA adapters on the same train split, evaluates on the held-out split, and packages checkpoint 2526.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { fill: #0f172a; font: 700 28px Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 400 15px Arial, sans-serif; }
+      .label { fill: #0f172a; font: 700 16px Arial, sans-serif; }
+      .small { fill: #334155; font: 400 13px Arial, sans-serif; }
+      .tiny { fill: #475569; font: 400 12px Arial, sans-serif; }
+      .data { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; }
+      .frozen { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .trainable { fill: #d1fae5; stroke: #059669; stroke-width: 2; }
+      .loss { fill: #fef3c7; stroke: #d97706; stroke-width: 2; }
+      .checkpoint { fill: #fce7f3; stroke: #db2777; stroke-width: 2; }
+      .line { stroke: #334155; stroke-width: 2.5; fill: none; marker-end: url(#arrow); stroke-linecap: round; stroke-linejoin: round; }
+      .soft-line { stroke: #64748b; stroke-width: 2.25; fill: none; marker-end: url(#arrow); stroke-dasharray: 7 7; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1120" height="580" rx="24"/>
+  <text class="title" x="40" y="48">AstraQ-VL Stage 2 Training Flow</text>
+  <text class="subtitle" x="40" y="75">Warm-start the Stage 1 connector, train LoRA adapters with the connector, and validate on the same held-out split.</text>
+
+  <rect class="data" x="60" y="145" width="180" height="110" rx="14"/>
+  <text class="label" x="150" y="181" text-anchor="middle">Stage 1 data</text>
+  <text class="small" x="150" y="206" text-anchor="middle">train.json + images</text>
+  <text class="small" x="150" y="228" text-anchor="middle">test.json held out</text>
+
+  <rect class="trainable" x="330" y="145" width="200" height="110" rx="14"/>
+  <text class="label" x="430" y="181" text-anchor="middle">Stage 2 train</text>
+  <text class="small" x="430" y="206" text-anchor="middle">connector + LoRA</text>
+  <text class="small" x="430" y="228" text-anchor="middle">1 epoch, 2526 steps</text>
+
+  <rect class="loss" x="620" y="145" width="190" height="110" rx="14"/>
+  <text class="label" x="715" y="181" text-anchor="middle">Held-out eval</text>
+  <text class="small" x="715" y="206" text-anchor="middle">answer-token loss</text>
+  <text class="small" x="715" y="228" text-anchor="middle">generation metrics</text>
+
+  <rect class="checkpoint" x="890" y="145" width="190" height="110" rx="14"/>
+  <text class="label" x="985" y="181" text-anchor="middle">Stage 2 release</text>
+  <text class="small" x="985" y="206" text-anchor="middle">checkpoint-2526</text>
+  <text class="small" x="985" y="228" text-anchor="middle">connector + LoRA zip</text>
+
+  <rect class="checkpoint" x="60" y="345" width="180" height="90" rx="14"/>
+  <text class="label" x="150" y="378" text-anchor="middle">Stage 1 connector</text>
+  <text class="small" x="150" y="404" text-anchor="middle">checkpoint-3789</text>
+
+  <rect class="frozen" x="330" y="345" width="200" height="90" rx="14"/>
+  <text class="label" x="430" y="378" text-anchor="middle">Frozen modules</text>
+  <text class="small" x="430" y="404" text-anchor="middle">CLIP + Qwen base</text>
+
+  <path class="line" d="M240 200 H330"/>
+  <path class="line" d="M530 200 H620"/>
+  <path class="line" d="M810 200 H890"/>
+  <path class="soft-line" d="M150 345 V305 H430 V255"/>
+  <path class="soft-line" d="M430 345 V255"/>
+
+  <text class="tiny" x="285" y="187" text-anchor="middle">training records</text>
+  <text class="tiny" x="575" y="187" text-anchor="middle">checkpoints</text>
+  <text class="tiny" x="850" y="187" text-anchor="middle">package</text>
+  <text class="tiny" x="260" y="293" text-anchor="middle">warm start</text>
+  <text class="tiny" x="452" y="300" text-anchor="middle">base weights</text>
+
+  <g transform="translate(40,510)">
+    <rect class="data" x="0" y="0" width="24" height="16" rx="4"/>
+    <text class="tiny" x="34" y="13">Data / input</text>
+    <rect class="frozen" x="150" y="0" width="24" height="16" rx="4"/>
+    <text class="tiny" x="184" y="13">Frozen weights</text>
+    <rect class="trainable" x="330" y="0" width="24" height="16" rx="4"/>
+    <text class="tiny" x="364" y="13">Trainable weights</text>
+    <rect class="loss" x="535" y="0" width="24" height="16" rx="4"/>
+    <text class="tiny" x="569" y="13">Loss / eval</text>
+    <rect class="checkpoint" x="690" y="0" width="24" height="16" rx="4"/>
+    <text class="tiny" x="724" y="13">Checkpoint / release</text>
+  </g>
+</svg>

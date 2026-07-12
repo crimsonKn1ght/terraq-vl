@@ -1,0 +1,8 @@
+# Extra dependencies for the original AstroLLaVA reference baseline.
+#
+# Install this on the GPU pod after the main requirements. The official repo is
+# an adapted LLaVA codebase and may install LLaVA-era pinned dependencies such as
+# torch/transformers/flash-attn; use a fresh environment if it conflicts with
+# the Qwen baseline environment.
+
+git+https://github.com/UniverseTBD/AstroLLaVA.git

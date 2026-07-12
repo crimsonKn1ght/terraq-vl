@@ -1,0 +1,31 @@
+# Stage-1 connector alignment on Galaxy10 DECaLS (astronomy image -> text).
+# Build the data first:  python scripts/build_galaxy_trainset.py --output-dir datasets/galaxy10_llava
+# Then train:            python train.py --config configs/pretrain_astro.yaml
+vision_encoder:
+  model_name: openai/clip-vit-large-patch14
+  select_layer: -2
+  select_feature: patch
+language_model:
+  model_name: Qwen/Qwen2.5-1.5B-Instruct
+  torch_dtype: bfloat16
+connector:
+  vision_hidden_size: 1024
+  llm_hidden_size: 1536
+data:
+  train_data_path: datasets/galaxy10_llava/train.json
+  image_dir: datasets/galaxy10_llava/images
+  max_length: 512          # galaxy captions are short; 512 leaves ample headroom
+training:
+  output_dir: ./checkpoints/astro-stage1
+  num_epochs: 3            # small (~16k) dataset, connector-only -> a few passes
+  per_device_batch_size: 16    # ~8-10 GB VRAM at bf16; drop to 8/4 on smaller cards
+  gradient_accumulation_steps: 8   # effective batch = 128
+  learning_rate: 0.001     # connector-only; lower than LLaVA's 2e-3 for the smaller set
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  bf16: true               # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series)
+  dataloader_num_workers: 8
+  logging_steps: 10
+  save_steps: 100
+  seed: 42

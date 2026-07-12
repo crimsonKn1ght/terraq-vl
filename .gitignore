@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+checkpoints/
+# Generated training data (build scripts write here; can be several GB)
+datasets/
+hf_cache/
+
+# Generated RAG artifacts: downloaded/cached images, FAISS/BM25 indexes, eval outputs
+data/corpus/
+data/corpus_astro/
+rag_cache/
+rag_index/
+rag_index_astro/
+rag_results/
+rag_results_astro/
+eval_runs/
+
+# Generated eval / release artifacts are ignored by default. Curated paper/release ZIPs and
+# checksum manifests may be force-added when they are part of a reproducibility release.
+*.jsonl
+*.zip
+REPRODUCE.md
+release/
+
+# Local-only paper draft for Overleaf/manual submission.
+paper/

@@ -1,0 +1,16 @@
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.40.0
+accelerate>=0.28.0
+datasets>=2.19.0
+Pillow>=10.0.0
+pyyaml>=6.0
+tqdm>=4.66.0
+safetensors>=0.4.0
+peft>=0.11.0          # Stage-2 LoRA fine-tuning of the LLM (see configs/finetune_*_stage2.yaml)
+
+# Retrieval-augmented generation (RAG) layer — medical VQA grounding pipeline.
+# NLI factual-consistency scoring reuses the `transformers` pipeline above (no extra dep).
+faiss-cpu>=1.7.4
+sentence-transformers>=2.6.0
+rank-bm25>=0.2.2

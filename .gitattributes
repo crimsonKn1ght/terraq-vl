@@ -1,0 +1,2 @@
+# Keep shell scripts LF so they run on the Linux RunPod pod after cloning from Windows.
+*.sh text eol=lf

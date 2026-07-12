@@ -1,0 +1,9 @@
+# Extra dependencies for the Qwen2.5-VL external full-heldout baseline.
+#
+# Install after the main requirements.txt. If Transformers raises
+# KeyError: 'qwen2_5_vl', install the current Transformers source build:
+#   pip install git+https://github.com/huggingface/transformers accelerate
+
+qwen-vl-utils==0.0.8
+accelerate>=0.28.0
+transformers>=4.49.0

@@ -1,0 +1,61 @@
+# Astronomy variant of the RAG ablation — same pipeline, different domain.
+#
+# Shows the pipeline is domain-agnostic: only the corpus, benchmark, retrieval text encoder,
+# and the prompt wording change. The retrieval machinery, ablation driver, eval runner, and
+# the prepend mechanism are reused unchanged.
+#
+# Run it exactly like the medical one:
+#   python run_rag.py --config configs/rag_eval_astro.yaml
+# Switch model.device to cpu (and torch_dtype to float32) to run without a GPU.
+#
+# IMPORTANT (same caveat as medical): meaningful answers need a TRAINED connector for this
+# CLIP+Qwen stack, or a VLM already trained on astronomical images. With checkpoint null the
+# pipeline runs end-to-end but generations/scores are not meaningful. Note also that standard
+# CLIP is only adequate for RGB galaxy cutouts; an astronomy vision model (e.g. AstroCLIP) is
+# the real upgrade and would require swapping the vision tower + retraining the connector.
+
+model:
+  config: configs/pretrain_stage1.yaml
+  checkpoint: null
+  device: cuda
+  torch_dtype: bfloat16
+
+retrieval:
+  retrieval_mode: hybrid
+  top_k: 3
+  candidate_pool: 30
+  modality_weight: 0.5
+  text_encoder_id: sentence-transformers/all-MiniLM-L6-v2   # general SBERT (astroBERT = upgrade)
+  visual_encoder_id: openai/clip-vit-large-patch14          # RGB galaxy cutouts; AstroCLIP = upgrade
+  cross_encoder_id: cross-encoder/ms-marco-MiniLM-L-6-v2
+  index_dir: ./rag_index_astro
+  index_type: flat_ip
+
+corpus:
+  name: galaxy_zoo                 # Galaxy10 DECaLS (matthieulel/galaxy10_decals), verified
+  source: hf
+  split: train                     # corpus from train; benchmark uses test (disjoint)
+  local_path: ./data/corpus_astro
+  max_pairs: 300
+  modality: galaxy
+
+eval:
+  benchmark: galaxy_vqa            # template-generated from Galaxy10 test split
+  split: test
+  num_samples: 50
+  modes: [no_retrieval, dense_visual, sparse_bm25, hybrid]
+  metrics: [exact_match, nli_consistency]
+  nli_model_id: roberta-large-mnli # general MNLI (no astro-NLI exists; read as relative)
+  output_dir: ./rag_results_astro
+  max_context_chars: 700
+  max_new_tokens: 64
+
+prompt:                            # domain wording (overrides medical defaults in context_format)
+  system: "You are a careful astronomy assistant. Use the retrieved reference observations only if they are relevant to the image and question; do not fabricate features."
+  references_header: "[Retrieved reference observations]"
+  references_footer: "[End of references]"
+
+phase3:
+  query_decomposition: false
+  adaptive_context_window: false
+  modality_aware_weighting: false

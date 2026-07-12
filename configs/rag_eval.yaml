@@ -1,0 +1,50 @@
+# Configuration for the retrieval-augmented (RAG) medical-VQA evaluation pipeline.
+#
+# This sits ON TOP of the existing frozen VLM (configs/pretrain_stage1.yaml). Nothing
+# here retrains the model — retrieval results are formatted into a text context block
+# and prepended to the prompt at inference time. Every model is referenced by id so a
+# domain-specialized medical VLM / encoder can be swapped in by editing this file only.
+
+model:
+  # Reuses the existing vision_encoder / language_model / connector definition.
+  config: configs/pretrain_stage1.yaml
+  # Connector checkpoint dir (contains connector.safetensors). Leave empty / null to
+  # run with a randomly-initialized connector — useful for smoke-testing the retrieval
+  # and prompt-formatting path before a connector has been trained.
+  checkpoint: null
+  device: cpu          # cpu | cuda
+  torch_dtype: float32 # float32 recommended on CPU; bfloat16 on a capable GPU
+
+retrieval:
+  retrieval_mode: hybrid        # dense_visual | sparse_bm25 | hybrid
+  top_k: 3                      # references prepended to the prompt
+  candidate_pool: 30            # pool size before cross-encoder reranking (hybrid)
+  modality_weight: 0.5          # visual-vs-text fusion weight (Phase-3 hook)
+  text_encoder_id: pritamdeka/S-PubMedBert-MS-MARCO          # clinical SBERT
+  visual_encoder_id: openai/clip-vit-large-patch14           # same weights as the VLM
+  cross_encoder_id: cross-encoder/ms-marco-MiniLM-L-6-v2     # reranker
+  index_dir: ./rag_index
+  index_type: flat_ip           # flat_ip (exact, sample-scale) — swap to ivf/hnsw at scale
+
+corpus:
+  name: iu_xray                 # iu_xray | roco | mimic_cxr | synthetic
+  source: hf                    # hf | local | synthetic
+  local_path: ./data/corpus
+  max_pairs: 200                # cap corpus size (tiny sample for now)
+  modality: chest_xray
+
+eval:
+  benchmark: vqa_rad            # vqa_rad | path_vqa
+  split: test
+  num_samples: 20               # cap benchmark size for CPU / smoke runs
+  modes: [no_retrieval, hybrid] # ablation subset; full = [no_retrieval, dense_visual, sparse_bm25, hybrid]
+  metrics: [exact_match, nli_consistency]
+  nli_model_id: roberta-large-mnli   # swap to a MedNLI/SciNLI-tuned checkpoint for clinical text
+  output_dir: ./rag_results
+  max_context_chars: 700        # hard cap on prepended references (trained window is 512 tokens)
+  max_new_tokens: 64
+
+phase3:                         # config hooks for Phase-3 refinements — all inert for now
+  query_decomposition: false
+  adaptive_context_window: false
+  modality_aware_weighting: false
