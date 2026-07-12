@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Train the connector on the astronomy set. Run after scripts/runpod_setup.sh.
+# Train on the VRSBench set. Run after scripts/runpod_setup.sh.
 #
-#     bash scripts/runpod_train.sh                          # uses configs/pretrain_astro.yaml
-#     bash scripts/runpod_train.sh configs/my_config.yaml   # custom config
+#     bash scripts/runpod_train.sh                                        # Stage 1: configs/pretrain_vrsbench.yaml
+#     bash scripts/runpod_train.sh configs/finetune_vrsbench_stage2.yaml  # Stage 2: connector + LoRA
+#     bash scripts/runpod_train.sh configs/my_config.yaml                 # any custom config
 #
 set -euo pipefail
 
 export HF_HOME="${HF_HOME:-/workspace/hf_cache}"
 # Reduce CUDA fragmentation OOMs (the large-vocab lm_head spikes allocations).
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
-CONFIG="${1:-configs/pretrain_astraq_vl.yaml}"
+CONFIG="${1:-configs/pretrain_vrsbench.yaml}"
 
 echo "==> Training with $CONFIG (HF_HOME=$HF_HOME)"
 python train.py --config "$CONFIG"
 
 echo
-echo "==> Training complete. Trained connector is in ./checkpoints/astraq-vl-stage1/"
-echo "    IMPORTANT: copy it off the pod BEFORE terminating, e.g. from your laptop:"
-echo "      runpodctl receive <code>        # after running 'runpodctl send checkpoints/astraq-vl-stage1' on the pod"
-echo "    (Or keep it: it already lives on the /workspace network volume.)"
+echo "==> Training complete. Checkpoints are under ./checkpoints/ (see the config's output_dir,"
+echo "    e.g. ./checkpoints/vrsbench-stage1/ for Stage 1)."
+echo "    IMPORTANT: copy them off the pod BEFORE terminating (or keep them on /workspace):"
+echo "      runpodctl send checkpoints/vrsbench-stage1     # then 'runpodctl receive <code>' on your laptop"
