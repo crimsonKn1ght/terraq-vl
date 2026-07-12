@@ -1,3 +1,5 @@
+"""Training loop for the VLM: optimizer, cosine schedule, accumulation, logging, checkpointing."""
+
 import logging
 import time
 from typing import Dict, Any
@@ -16,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class VLMTrainer:
+    """Accelerate training loop (connector-only in Stage 1, connector + LoRA in Stage 2).
+
+    Sets up the AdamW optimizer (optionally a split connector/LoRA LR), cosine-warmup schedule,
+    gradient accumulation and clipping, periodic logging, and connector(+LoRA) checkpointing.
+    """
 
     def __init__(
         self,
@@ -48,6 +55,7 @@ class VLMTrainer:
         self.connector_lr = train_cfg.get("connector_lr", None)
 
     def train(self):
+        """Run the full training loop, checkpointing the connector (and LoRA adapter in Stage 2)."""
         trainable = count_trainable_parameters(self.model)
         total = count_total_parameters(self.model)
         logger.info(f"Trainable parameters: {trainable:,}")

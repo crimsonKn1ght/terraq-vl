@@ -1,3 +1,5 @@
+"""LLaVA-format dataset: reads the JSON, preprocesses images, tokenizes with label masking."""
+
 import json
 import os
 import logging
@@ -14,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 class LLaVAPretrainDataset(Dataset):
+    """Dataset over LLaVA-format records ``{image, conversations}``.
+
+    Each item yields ``input_ids`` / ``labels`` (tokenized, label-masked conversation) and the
+    preprocessed ``images`` tensor. A failed sample retries the next few indices, then falls back to
+    a dummy, so one unreadable image never aborts training.
+    """
 
     def __init__(
         self,

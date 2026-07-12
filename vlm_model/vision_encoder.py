@@ -1,3 +1,5 @@
+"""Frozen CLIP vision tower: image tensor -> patch feature sequence."""
+
 import torch
 import torch.nn as nn
 from transformers import CLIPVisionModel, CLIPImageProcessor
@@ -6,6 +8,7 @@ from .utils import freeze_module
 
 
 class VisionEncoder(nn.Module):
+    """Wraps a frozen ``CLIPVisionModel``, returning penultimate-layer patch tokens (CLS dropped)."""
 
     def __init__(
         self,

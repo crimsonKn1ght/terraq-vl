@@ -1,3 +1,5 @@
+"""Batch collator: right-pads input_ids / labels, builds the attention mask, stacks images."""
+
 from typing import List, Dict
 
 import torch
@@ -7,6 +9,7 @@ from vlm_model.utils import IGNORE_INDEX
 
 
 class VLMDataCollator:
+    """Pads a batch to a common length (labels padded with ``IGNORE_INDEX``) and stacks the images."""
 
     def __init__(self, tokenizer: PreTrainedTokenizer, max_length: int = 2048):
         self.pad_token_id = tokenizer.pad_token_id

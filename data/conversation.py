@@ -1,3 +1,5 @@
+"""Conversation tokenization + label masking (only the assistant answer is supervised)."""
+
 from typing import List, Dict, Tuple
 
 import torch
@@ -12,6 +14,11 @@ def tokenize_conversation(
     image_token_id: int,
     max_length: int = 2048,
 ) -> Tuple[torch.LongTensor, torch.LongTensor]:
+    """Tokenize a single-turn conversation into ``(input_ids, labels)`` with the prompt masked.
+
+    Wraps the human/assistant turns in the Qwen chat template and sets ``labels`` to ``IGNORE_INDEX``
+    for every prompt token, so only the assistant's answer is supervised. Truncates to ``max_length``.
+    """
     human_msg = ""
     assistant_msg = ""
     for turn in conversations:

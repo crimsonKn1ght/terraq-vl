@@ -1,3 +1,5 @@
+"""Shared constants and small helpers for the VLM (special tokens, freezing, param counts)."""
+
 import torch
 import torch.nn as nn
 

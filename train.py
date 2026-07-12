@@ -1,3 +1,9 @@
+"""Training entry point: build the VLM from a YAML config and run Stage-1 / Stage-2 training.
+
+    python train.py --config configs/pretrain_stage1.yaml        # Stage 1 (connector only)
+    python train.py --config configs/finetune_..._stage2.yaml    # Stage 2 (connector + LoRA)
+"""
+
 import argparse
 import logging
 import os

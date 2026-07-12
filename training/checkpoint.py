@@ -1,3 +1,5 @@
+"""Save/load the trainable deltas — the connector (both stages) and the LoRA adapter (Stage 2)."""
+
 import json
 import os
 from typing import Optional, Any
@@ -16,6 +18,12 @@ def save_connector_checkpoint(
     output_dir: str,
     peft_model: Optional[nn.Module] = None,
 ) -> str:
+    """Write a ``checkpoint-<step>/`` dir with the connector, training state, and meta.
+
+    Saves ``connector.safetensors`` (always) plus ``training_state.pt`` and ``meta.json``. In Stage 2
+    (``peft_model`` given) also saves the LoRA adapter under ``lora/``; Stage-1 dirs omit it and stay
+    byte-compatible. Returns the checkpoint directory path.
+    """
     checkpoint_dir = os.path.join(output_dir, f"checkpoint-{step}")
     os.makedirs(checkpoint_dir, exist_ok=True)
 

@@ -1,3 +1,5 @@
+"""Cosine learning-rate schedule with linear warmup."""
+
 import math
 
 import torch
@@ -10,6 +12,7 @@ def build_cosine_warmup_scheduler(
     num_training_steps: int,
     min_lr_ratio: float = 0.0,
 ) -> LambdaLR:
+    """Linear warmup for ``num_warmup_steps``, then cosine decay to ``min_lr_ratio`` of the base LR."""
 
     def lr_lambda(current_step: int) -> float:
         if current_step < num_warmup_steps:

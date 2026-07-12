@@ -1,3 +1,11 @@
+"""Composite LLaVA-style vision-language model.
+
+Wires a frozen vision encoder, a trainable MLP connector, and an (optionally LoRA-adapted) causal
+LLM into one module. The core is ``prepare_inputs_embeds``, which swaps the single ``<image>``
+placeholder token for the projected visual patch embeddings so the LLM consumes image and text as
+one embedding sequence — no model or tokenizer surgery required.
+"""
+
 from typing import Optional, Tuple
 
 import torch
@@ -10,6 +18,12 @@ from .language_model import LanguageModel
 
 
 class VLMForCausalLM(nn.Module):
+    """Vision encoder + connector + causal LLM, trained by next-token prediction on image-text pairs.
+
+    Stage 1 trains only the connector (vision + LLM frozen); Stage 2 additionally trains LoRA adapters
+    on the LLM. Constructed from a parsed config dict (``vision_encoder`` / ``language_model`` /
+    ``connector`` blocks).
+    """
 
     def __init__(self, config: dict):
         super().__init__()
@@ -70,6 +84,11 @@ class VLMForCausalLM(nn.Module):
         return self.vision_encoder.image_processor
 
     def encode_images(self, images: torch.Tensor) -> torch.Tensor:
+        """Frozen vision features -> connector -> LLM-space embeddings ``(B, num_patches, D_llm)``.
+
+        The vision tower runs under ``no_grad`` but the connector does not, so gradients flow only
+        into the connector (and, in Stage 2, the LLM's LoRA adapters).
+        """
         with torch.no_grad():
             vision_features = self.vision_encoder(images)
         return self.connector(vision_features)
@@ -81,6 +100,13 @@ class VLMForCausalLM(nn.Module):
         labels: Optional[torch.LongTensor],
         images: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        """Build ``inputs_embeds`` by replacing each ``<image>`` token with the visual patch embeds.
+
+        For every sample the sequence becomes ``[text before] + [num_patches visual embeds] +
+        [text after]``; the visual positions are masked in ``labels`` (``IGNORE_INDEX``) so they never
+        contribute to the loss, and marked as attended in ``attention_mask``. Sequences are then
+        right-padded to a common length. Returns ``(embeds, attention_mask, labels)``.
+        """
         batch_size = input_ids.shape[0]
         embed_tokens = self.language_model.get_input_embeddings()
 

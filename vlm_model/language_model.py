@@ -1,3 +1,10 @@
+"""Frozen causal LLM wrapper.
+
+Loads the base LLM + tokenizer, registers the ``<image>`` special token (growing the embedding
+table by one row), and keeps everything frozen. Stage 2 optionally attaches LoRA adapters so only
+the low-rank weights train while the base weights stay frozen.
+"""
+
 from typing import Optional
 
 import torch
@@ -15,6 +22,7 @@ DEFAULT_LORA_TARGET_MODULES = [
 
 
 class LanguageModel(nn.Module):
+    """Frozen ``AutoModelForCausalLM`` + tokenizer, with the ``<image>`` token and optional LoRA."""
 
     def __init__(
         self,

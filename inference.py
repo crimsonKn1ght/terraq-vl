@@ -1,3 +1,8 @@
+"""Single-image inference: load a trained checkpoint and answer a prompt about an image.
+
+    python inference.py --config <cfg> --checkpoint <ckpt-dir> --image <img> --prompt "..."
+"""
+
 import argparse
 import logging
 
@@ -17,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_vlm(config_path: str, connector_checkpoint: str, device: str = "cuda") -> VLMForCausalLM:
+    """Build the VLM from the config and load the connector (+ LoRA adapter if the config has one)."""
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
@@ -50,6 +56,7 @@ def run_inference(
     temperature: float = 0.7,
     device: str = "cuda",
 ) -> str:
+    """Generate an answer for ``image_path`` + ``prompt`` (greedy when ``temperature`` is 0)."""
     pixel_values = load_and_process_image(image_path, model.image_processor)
     pixel_values = pixel_values.unsqueeze(0).to(device)
 
