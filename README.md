@@ -617,7 +617,51 @@ Further extensions might include:
 
 ## License
 
-MIT License. See LICENSE file (if present) for details.
+The **code in this repository** is released under the **MIT License** — see the [`LICENSE`](LICENSE)
+file (© 2026 Gourab Roy). MIT covers the source code only. The pretrained base models and the
+datasets you run it with each carry their **own** licenses, which flow through to any weights you
+train or data you redistribute — summarized in the next section.
+
+## Model & Data Licensing
+
+Your code license (MIT) and the license that binds your **trained weights / redistributed data** are
+separate. A fine-tuned checkpoint or a derived dataset is governed by the **most restrictive** of the
+base model and the training data you actually use — not by MIT.
+
+| Component | Where it's used | License | Commercial use |
+|---|---|---|---|
+| This repository's code | everywhere | **MIT** (© 2026 Gourab Roy) | ✅ Yes |
+| CLIP ViT-L/14 (`openai/clip-vit-large-patch14`) | vision encoder (all configs) | MIT (original OpenAI CLIP) | ✅ Yes |
+| Qwen2.5-1.5B-Instruct | backbone configs (`pretrain_stage1`, `pretrain_astraq_vl`, …) | **Apache-2.0** | ✅ Yes |
+| Qwen2.5-3B-Instruct | VRSBench configs (`pretrain_vrsbench`, `finetune_vrsbench_stage2`) | **Qwen Research License** (`qwen-research`) | ❌ **Non-commercial**; commercial needs a separate license from Alibaba Cloud |
+| AstroLLaVA_convos | astronomy training data | **CC-BY-SA-4.0** | ✅ Yes, with attribution + share-alike |
+| VRSBench | remote-sensing training data | **CC-BY-NC-4.0** | ❌ **Non-commercial** + attribution; source images from DOTA-v2 / DIOR (their own academic terms) |
+
+**Net effect by stack:**
+- **Default VRSBench + Qwen2.5-3B** (`configs/*vrsbench*.yaml`): trained weights and any derived data
+  are **research / non-commercial, attribution-required**. Both the base model (`qwen-research`) and
+  the data (CC-BY-NC-4.0) are non-commercial, so the checkpoint inherits that.
+- **Astronomy backbone + Qwen2.5-1.5B** (`configs/pretrain_astraq_vl.yaml`): Apache-2.0 model +
+  CC-BY-SA-4.0 data → commercial use is possible **with** attribution and share-alike on the data.
+- **Want an unrestricted/commercial project?** Use an **Apache-2.0 Qwen variant** (0.5B / 1.5B / 7B /
+  14B / 32B — the 3B and 72B are the `qwen-research` exceptions) together with a
+  commercially-licensed dataset.
+
+The Qwen Research License additionally forbids using the model's outputs to improve any non-Qwen LLM.
+
+**Attribution / citation.** If you release weights, data, or results, cite and attribute the
+components you used:
+- **VRSBench** — [dataset](https://huggingface.co/datasets/xiang709/VRSBench) ·
+  [paper (arXiv:2406.12384)](https://arxiv.org/abs/2406.12384); and its image sources **DOTA-v2** and
+  **DIOR**.
+- **AstroLLaVA_convos** — [`UniverseTBD/AstroLLaVA_convos`](https://huggingface.co/datasets/UniverseTBD/AstroLLaVA_convos)
+  (arXiv:2504.08583); keep the NASA APOD / ESO / Hubble caption attribution.
+- **Qwen2.5** — [Qwen2.5 Technical Report](https://qwenlm.github.io/blog/qwen2.5/) and the model's
+  license file. **CLIP** — [OpenAI CLIP](https://github.com/openai/CLIP). **LLaVA** —
+  [arXiv:2304.08485](https://arxiv.org/abs/2304.08485).
+
+> This summary is provided for convenience and is **not legal advice**. Always check each model card
+> and dataset card for the authoritative, current license terms before redistribution or deployment.
 
 ## Contributing
 
