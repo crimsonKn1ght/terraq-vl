@@ -33,10 +33,21 @@ def main():
         default="configs/pretrain_stage1.yaml",
         help="Path to config YAML file",
     )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Checkpoint dir to resume from (e.g. checkpoints/vrsbench-stage1/checkpoint-2300): "
+        "restores the connector, optimizer, LR scheduler, and step counter, then continues the run.",
+    )
     args = parser.parse_args()
 
     with open(args.config, "r") as f:
         config = yaml.safe_load(f)
+
+    if args.resume:
+        config.setdefault("training", {})["resume_from"] = args.resume
+        logger.info(f"Will resume training from {args.resume}")
 
     train_cfg = config.get("training", {})
     use_bf16 = train_cfg.get("bf16", True)

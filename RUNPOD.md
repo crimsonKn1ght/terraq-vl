@@ -69,6 +69,25 @@ If you hit **out-of-memory**, lower `per_device_batch_size` in `configs/pretrain
 and raise `gradient_accumulation_steps` to keep the effective batch at 128. Setting
 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (already exported by `runpod_train.sh`) also helps.
 
+### Resuming an interrupted run
+
+Each saved checkpoint carries the connector, optimizer, and LR-scheduler state, so you can pick up
+where you stopped with `--resume`:
+
+```bash
+bash scripts/runpod_train.sh configs/pretrain_vrsbench.yaml \
+    --resume checkpoints/vrsbench-stage1/checkpoint-2300
+# equivalently: python train.py --config configs/pretrain_vrsbench.yaml \
+#     --resume checkpoints/vrsbench-stage1/checkpoint-2300
+```
+
+This restores the connector weights, optimizer moments, cosine-LR position, and the step counter
+(e.g. 2300), then trains only the **remaining** steps. Resuming works across a batch-size change **as
+long as the effective batch is unchanged** (batch 4 × accum 32 and batch 8 × accum 16 are both
+effective 128), because the total step count and LR schedule then line up. Note the dataloader
+reshuffles from the start of an epoch rather than resuming mid-epoch — the LR schedule and optimizer
+state are what matter for a clean continuation.
+
 ## 4. Stage 2 (optional): LoRA instruction tuning
 
 After Stage 1, point `stage1_checkpoint` in `configs/finetune_vrsbench_stage2.yaml` at your final

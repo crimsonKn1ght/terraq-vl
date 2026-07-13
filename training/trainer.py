@@ -12,7 +12,7 @@ from vlm_model.vlm import VLMForCausalLM
 from vlm_model.utils import count_trainable_parameters, count_total_parameters
 from data.collator import VLMDataCollator
 from .lr_scheduler import build_cosine_warmup_scheduler
-from .checkpoint import save_connector_checkpoint
+from .checkpoint import save_connector_checkpoint, load_connector_checkpoint, load_lora_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ class VLMTrainer:
         self.stage = train_cfg.get("stage", 1)
         # Optional separate LR for the (pretrained) connector vs the fresh LoRA adapters.
         self.connector_lr = train_cfg.get("connector_lr", None)
+        # Optional resume: checkpoint dir to restore connector + optimizer + scheduler + step from.
+        self.resume_from = train_cfg.get("resume_from", None)
 
     def train(self):
         """Run the full training loop, checkpointing the connector (and LoRA adapter in Stage 2)."""
@@ -140,7 +142,25 @@ class VLMTrainer:
         # Stage-2 also checkpoints the LoRA adapter; Stage-1 passes None (connector only).
         peft_model = unwrapped.language_model.model if is_lora else None
 
+        # Resume: restore connector + optimizer + scheduler (+ LoRA adapter) and continue from the
+        # saved step. As long as the effective batch matches the original run, num_training_steps and
+        # the cosine schedule line up (batch 4 x accum 32 == batch 8 x accum 16 == effective 128), so
+        # training simply completes the REMAINING steps.
+        if self.resume_from:
+            resumed_step = load_connector_checkpoint(
+                unwrapped.connector, self.resume_from, optimizer, scheduler
+            )
+            if is_lora:
+                load_lora_adapter(unwrapped.language_model.model, self.resume_from)
+            global_step = resumed_step
+            logger.info(
+                f"Resumed from {self.resume_from} at step {global_step}/{num_training_steps} "
+                f"({max(0, num_training_steps - global_step)} steps remaining)"
+            )
+
         for epoch in range(self.num_epochs):
+            if global_step >= num_training_steps:
+                break
             logger.info(f"Starting epoch {epoch + 1}/{self.num_epochs}")
 
             for step, batch in enumerate(dataloader):
@@ -225,6 +245,9 @@ class VLMTrainer:
                             peft_model=peft_model,
                         )
                         logger.info(f"Saved checkpoint at step {global_step}")
+
+                    if global_step >= num_training_steps:
+                        break
 
         if self.accelerator.is_main_process:
             save_connector_checkpoint(
