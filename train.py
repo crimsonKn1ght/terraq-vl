@@ -7,9 +7,11 @@
 import argparse
 import logging
 import os
+import random
 
 import yaml
 import torch
+from torch.utils.data import Subset
 from accelerate import Accelerator
 
 from vlm_model.vlm import VLMForCausalLM
@@ -95,11 +97,45 @@ def main():
     )
     logger.info(f"Dataset size: {len(dataset)} samples")
 
+    # Optional held-out validation set. When data.val_data_path is given (e.g. the disjoint test.json
+    # emitted by the builders' --test-fraction), the trainer computes a held-out loss every eval_steps
+    # so overfitting / under-training is visible during the run. A missing file is a warning, not a
+    # crash — a long run should never abort over a stale val path.
+    val_dataset = None
+    val_data_path = data_cfg.get("val_data_path")
+    if val_data_path and not os.path.exists(val_data_path):
+        logger.warning(
+            f"val_data_path is set to '{val_data_path}' but the file does not exist — continuing "
+            "WITHOUT validation loss. Build a held-out split (builders support --test-fraction) or "
+            "fix the path to enable it."
+        )
+        val_data_path = None
+    if val_data_path:
+        val_image_dir = data_cfg.get("val_image_dir", data_cfg["image_dir"])
+        logger.info("Building validation dataset...")
+        val_dataset = LLaVAPretrainDataset(
+            data_path=val_data_path,
+            image_dir=val_image_dir,
+            tokenizer=model.tokenizer,
+            image_processor=model.image_processor,
+            image_token_id=model.image_token_id,
+            max_length=data_cfg.get("max_length", 2048),
+        )
+        # Deterministically subsample large held-out sets so each eval stays fast; the seed keeps the
+        # scored subset identical across evals (and across resumes), preserving comparability.
+        eval_num_samples = train_cfg.get("eval_num_samples", 0)
+        if eval_num_samples and 0 < eval_num_samples < len(val_dataset):
+            indices = list(range(len(val_dataset)))
+            random.Random(train_cfg.get("seed", 42)).shuffle(indices)
+            val_dataset = Subset(val_dataset, sorted(indices[:eval_num_samples]))
+        logger.info(f"Validation dataset size: {len(val_dataset)} samples")
+
     trainer = VLMTrainer(
         model=model,
         train_dataset=dataset,
         config=config,
         accelerator=accelerator,
+        val_dataset=val_dataset,
     )
 
     logger.info("Starting training...")

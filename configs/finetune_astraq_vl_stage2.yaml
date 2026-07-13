@@ -31,6 +31,8 @@ stage1_checkpoint: ./checkpoints/astraq-vl-stage1/checkpoint-3789
 data:
   train_data_path: datasets/astrollava_llava/train.json
   image_dir: datasets/astrollava_llava/images
+  val_data_path: datasets/astrollava_llava/val.json   # disjoint validation split (builder --val-fraction)
+  # val_image_dir: datasets/astrollava_llava/images    # defaults to image_dir (all splits share images/)
   max_length: 512          # +256 image tokens -> ~768 effective seq
 training:
   stage: 2                 # connector + LoRA (Stage 1 = connector only)
@@ -48,4 +50,6 @@ training:
   dataloader_num_workers: 8
   logging_steps: 10
   save_steps: 200
+  eval_steps: 200          # held-out (validation) loss cadence; matches save_steps so each ckpt logs val
+  eval_num_samples: 512    # cap held-out samples scored per eval for speed (0 = score all of val.json)
   seed: 42

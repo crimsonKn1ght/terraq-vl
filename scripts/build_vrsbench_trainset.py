@@ -20,6 +20,13 @@ Run from the repo root:
     # Full build with a 2% held-out test split (downloads VRSBench_train.json + Images_train.zip ~8.4 GB):
     python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava --test-fraction 0.02
 
+    # Three-way split for in-training validation: hold out 4% and split it evenly into val/test
+    # (~2% val.json for the trainer's validation loss, ~2% test.json kept untouched for final eval).
+    # The training set is byte-identical to a --test-fraction 0.04 test-only build (val_rng only
+    # re-partitions the held-out side), so a Stage-1 connector trained on it stays valid.
+    python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
+        --test-fraction 0.04 --val-fraction 0.5
+
     # Quick smoke test on 50 source images first (still needs the image zip, or use --images-dir):
     python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava --max-samples 50
 
@@ -200,10 +207,20 @@ def parse_args() -> argparse.Namespace:
         "--test-fraction",
         type=float,
         default=0.0,
-        help="Hold out this fraction of IMAGES as a disjoint test split (test.json). Per-image and "
+        help="Hold out this fraction of IMAGES from training (the held-out pool). Per-image and "
         "seeded by --seed, so an image's caption and all its VQA records stay together. 0.0 = none.",
     )
-    parser.add_argument("--seed", type=int, default=42, help="Seed for the train/test split.")
+    parser.add_argument(
+        "--val-fraction",
+        type=float,
+        default=0.0,
+        help="Of the HELD-OUT images (see --test-fraction), route this fraction to a disjoint "
+        "validation split (val.json); the rest go to test.json. Carved from the held-out pool with a "
+        "separate seeded RNG, so the train/held-out partition is IDENTICAL to a test-only build — "
+        "adding validation only re-partitions the held-out test, it never touches the training data. "
+        "e.g. --test-fraction 0.04 --val-fraction 0.5 -> ~2%% val + ~2%% test. 0.0 = no val split.",
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Seed for the train/held-out split.")
     parser.add_argument(
         "--max-image-size",
         type=int,
@@ -229,10 +246,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     split_rng = Random(f"{args.seed}-test-split")
+    # Separate stream for the val/test sub-split so the train vs. held-out decision above is
+    # unaffected by --val-fraction — the training set stays byte-identical to a test-only build.
+    val_rng = Random(f"{args.seed}-val-split")
 
     output_dir = Path(args.output_dir).resolve()
     image_dir = output_dir / "images"
     train_json = output_dir / f"{args.split}.json"
+    val_json = output_dir / "val.json"
     test_json = output_dir / "test.json"
 
     if train_json.exists() and not args.overwrite:
@@ -247,10 +268,10 @@ def main() -> None:
     if args.max_samples is not None:
         rows = rows[: args.max_samples]
 
-    train_records, test_records = [], []
-    image_bucket = {}          # image_name -> "train" | "test" (decided once per image)
+    train_records, val_records, test_records = [], [], []
+    image_bucket = {}          # image_name -> "train" | "val" | "test" (decided once per image)
     saved_images = set()       # output basenames already written
-    train_images = test_images = 0
+    train_images = val_images = test_images = 0
     caption_like = qa_count = skipped = 0
 
     for idx, row in enumerate(tqdm(rows, desc="Exporting")):
@@ -265,14 +286,20 @@ def main() -> None:
 
             # Route this image (and ALL of its records) to one side, so a held-out image never leaks.
             if src_image not in image_bucket:
-                is_test = args.test_fraction > 0 and split_rng.random() < args.test_fraction
-                image_bucket[src_image] = "test" if is_test else "train"
-                if is_test:
-                    test_images += 1
+                is_heldout = args.test_fraction > 0 and split_rng.random() < args.test_fraction
+                if is_heldout:
+                    # Carve validation out of the held-out pool (val_rng keeps train unaffected).
+                    is_val = args.val_fraction > 0 and val_rng.random() < args.val_fraction
+                    image_bucket[src_image] = "val" if is_val else "test"
+                    if is_val:
+                        val_images += 1
+                    else:
+                        test_images += 1
                 else:
+                    image_bucket[src_image] = "train"
                     train_images += 1
             bucket_name = image_bucket[src_image]
-            bucket = test_records if bucket_name == "test" else train_records
+            bucket = {"val": val_records, "test": test_records}.get(bucket_name, train_records)
 
             # Materialize the image once (re-encoded JPEG, optionally downscaled).
             if source is not None and out_name not in saved_images:
@@ -294,6 +321,9 @@ def main() -> None:
 
     with train_json.open("w", encoding="utf-8") as f:
         json.dump(train_records, f, ensure_ascii=False, indent=2)
+    if val_records:
+        with val_json.open("w", encoding="utf-8") as f:
+            json.dump(val_records, f, ensure_ascii=False, indent=2)
     if args.test_fraction > 0:
         with test_json.open("w", encoding="utf-8") as f:
             json.dump(test_records, f, ensure_ascii=False, indent=2)
@@ -311,9 +341,14 @@ def main() -> None:
         print(f"Removed the downloaded {IMAGES_ZIP_NAME} (reclaimed ~8 GB of disk).")
 
     print("\nExport complete")
-    print(f"Source images:   {len(image_bucket)} (train {train_images} / test {test_images})")
+    print(
+        f"Source images:   {len(image_bucket)} "
+        f"(train {train_images} / val {val_images} / test {test_images})"
+    )
     print(f"Caption records: ~{caption_like}   VQA records: ~{qa_count}")
     print(f"Train: {len(train_records)} records -> {train_json}")
+    if val_records:
+        print(f"Val:   {len(val_records)} records -> {val_json}")
     if args.test_fraction > 0:
         print(f"Test:  {len(test_records)} records -> {test_json}")
     print(f"Rows skipped:    {skipped}")

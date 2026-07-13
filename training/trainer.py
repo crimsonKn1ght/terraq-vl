@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from accelerate import Accelerator
 
 from vlm_model.vlm import VLMForCausalLM
-from vlm_model.utils import count_trainable_parameters, count_total_parameters
+from vlm_model.utils import count_trainable_parameters, count_total_parameters, IGNORE_INDEX
 from data.collator import VLMDataCollator
 from .lr_scheduler import build_cosine_warmup_scheduler
 from .checkpoint import save_connector_checkpoint, load_connector_checkpoint, load_lora_adapter
@@ -22,6 +22,11 @@ class VLMTrainer:
 
     Sets up the AdamW optimizer (optionally a split connector/LoRA LR), cosine-warmup schedule,
     gradient accumulation and clipping, periodic logging, and connector(+LoRA) checkpointing.
+
+    The logged training loss is a *token-weighted* running mean, and — when a ``val_dataset`` is
+    given — a held-out validation loss is computed every ``eval_steps`` (same token-weighted method
+    as ``scripts/eval_loss_curve.py``) and written into each checkpoint's ``meta.json``, so overfitting
+    (val rising while train falls) and under-training (val still falling) are visible during the run.
     """
 
     def __init__(
@@ -30,9 +35,11 @@ class VLMTrainer:
         train_dataset,
         config: Dict[str, Any],
         accelerator: Accelerator,
+        val_dataset=None,
     ):
         self.model = model
         self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
         self.config = config
         self.accelerator = accelerator
 
@@ -47,6 +54,10 @@ class VLMTrainer:
         self.max_grad_norm = train_cfg.get("max_grad_norm", 1.0)
         self.logging_steps = train_cfg.get("logging_steps", 10)
         self.save_steps = train_cfg.get("save_steps", 500)
+        # How often to compute held-out validation loss (defaults to the checkpoint cadence, so every
+        # saved checkpoint carries a matching val_loss). Only used when a val_dataset is provided.
+        self.eval_steps = train_cfg.get("eval_steps", self.save_steps)
+        self.latest_val_loss = None
         self.dataloader_num_workers = train_cfg.get("dataloader_num_workers", 4)
         self.seed = train_cfg.get("seed", 42)
         # Stage 1 = connector-only (default). Stage 2 = connector + LoRA on the LLM.
@@ -104,6 +115,20 @@ class VLMTrainer:
             drop_last=True,
         )
 
+        # Held-out loader: no shuffle, keep every sample (drop_last=False) so the val loss is a stable,
+        # fully-comparable number across evals.
+        val_dataloader = None
+        if self.val_dataset is not None and len(self.val_dataset) > 0:
+            val_dataloader = DataLoader(
+                self.val_dataset,
+                batch_size=self.per_device_batch_size,
+                shuffle=False,
+                num_workers=self.dataloader_num_workers,
+                pin_memory=True,
+                collate_fn=collator,
+                drop_last=False,
+            )
+
         num_update_steps_per_epoch = len(dataloader) // self.gradient_accumulation_steps
         num_training_steps = num_update_steps_per_epoch * self.num_epochs
         num_warmup_steps = int(num_training_steps * self.warmup_ratio)
@@ -117,6 +142,8 @@ class VLMTrainer:
         self.model, optimizer, dataloader, scheduler = self.accelerator.prepare(
             self.model, optimizer, dataloader, scheduler
         )
+        if val_dataloader is not None:
+            val_dataloader = self.accelerator.prepare(val_dataloader)
 
         logger.info(f"Total training steps: {num_training_steps}")
         logger.info(f"Warmup steps: {num_warmup_steps}")
@@ -126,16 +153,12 @@ class VLMTrainer:
 
         global_step = 0
         running_loss = 0.0
+        running_tokens = 0
         start_time = time.time()
         grad_checked = False
 
-        self.model.train()
-        # The vision encoder is always frozen → keep it in eval. The LLM is frozen in Stage 1 (keep
-        # eval), but in Stage 2 it carries trainable LoRA, so leave it in train() for LoRA dropout.
+        self._set_train_mode()
         unwrapped = self.accelerator.unwrap_model(self.model)
-        unwrapped.vision_encoder.model.eval()
-        if self.stage < 2:
-            unwrapped.language_model.model.eval()
 
         is_lora = getattr(unwrapped.language_model, "is_lora", False)
         trainable_for_step = [p for p in unwrapped.parameters() if p.requires_grad]
@@ -205,15 +228,20 @@ class VLMTrainer:
                     scheduler.step()
                     optimizer.zero_grad()
 
-                running_loss += loss.detach().item()
+                # Token-weight the running loss: each micro-batch's loss is a mean over ITS supervised
+                # tokens, so weighting by that token count (not counting every micro-batch equally)
+                # makes the logged value a true per-token mean. This is what removes the high-frequency
+                # jitter from the curve — a 3-token VQA answer no longer swings the average like a
+                # 200-token caption. Same weighting scheme as scripts/eval_loss_curve.py.
+                label_tokens = int((batch["labels"] != IGNORE_INDEX).sum().item())
+                running_loss += loss.detach().item() * label_tokens
+                running_tokens += label_tokens
 
                 if self.accelerator.sync_gradients:
                     global_step += 1
 
                     if global_step % self.logging_steps == 0:
-                        avg_loss = running_loss / (
-                            self.logging_steps * self.gradient_accumulation_steps
-                        )
+                        avg_loss = running_loss / max(1, running_tokens)
                         elapsed = time.time() - start_time
                         samples_per_sec = (
                             global_step
@@ -230,6 +258,21 @@ class VLMTrainer:
                             f"Samples/s: {samples_per_sec:.1f}"
                         )
                         running_loss = 0.0
+                        running_tokens = 0
+
+                    # Validate BEFORE saving so a checkpoint written on the same step records the
+                    # matching val_loss. evaluate() runs on all processes (it reduces across them);
+                    # only the main process logs the line.
+                    if (
+                        val_dataloader is not None
+                        and global_step % self.eval_steps == 0
+                    ):
+                        self.latest_val_loss = self.evaluate(val_dataloader)
+                        if self.accelerator.is_main_process:
+                            logger.info(
+                                f"Step {global_step}/{num_training_steps} | "
+                                f"Val loss: {self.latest_val_loss:.4f}"
+                            )
 
                     if (
                         global_step % self.save_steps == 0
@@ -243,11 +286,20 @@ class VLMTrainer:
                             loss=loss.item(),
                             output_dir=self.output_dir,
                             peft_model=peft_model,
+                            val_loss=self.latest_val_loss,
                         )
                         logger.info(f"Saved checkpoint at step {global_step}")
 
                     if global_step >= num_training_steps:
                         break
+
+        if val_dataloader is not None:
+            self.latest_val_loss = self.evaluate(val_dataloader)
+            if self.accelerator.is_main_process:
+                logger.info(
+                    f"Step {global_step}/{num_training_steps} | "
+                    f"Final val loss: {self.latest_val_loss:.4f}"
+                )
 
         if self.accelerator.is_main_process:
             save_connector_checkpoint(
@@ -258,5 +310,53 @@ class VLMTrainer:
                 loss=loss.item(),
                 output_dir=self.output_dir,
                 peft_model=peft_model,
+                val_loss=self.latest_val_loss,
             )
             logger.info(f"Training complete. Final checkpoint saved at step {global_step}")
+
+    def _set_train_mode(self) -> None:
+        """Put the model in training mode while keeping the frozen sub-modules in eval.
+
+        The vision encoder is always frozen (keep eval). The LLM is frozen in Stage 1 (keep eval) but
+        carries trainable LoRA in Stage 2, so it stays in train() there for LoRA dropout. Called at
+        startup and again after every validation pass, which flips the whole model to eval().
+        """
+        self.model.train()
+        unwrapped = self.accelerator.unwrap_model(self.model)
+        unwrapped.vision_encoder.model.eval()
+        if self.stage < 2:
+            unwrapped.language_model.model.eval()
+
+    @torch.no_grad()
+    def evaluate(self, val_dataloader) -> float:
+        """Return the token-weighted mean answer-token loss over the held-out loader.
+
+        Mirrors scripts/eval_loss_curve.py: each batch's loss (a mean over its supervised tokens) is
+        weighted by that token count, so the aggregate is a true per-token mean — smooth and directly
+        comparable across evals. Totals are reduced across processes; training mode is restored before
+        returning. No backward pass, so eval batches can be as large as the training ones.
+        """
+        self.model.eval()
+        device = self.accelerator.device
+        total_loss = torch.zeros(1, device=device)
+        total_tokens = torch.zeros(1, device=device)
+        for batch in val_dataloader:
+            n_tokens = (batch["labels"] != IGNORE_INDEX).sum()
+            if n_tokens.item() == 0:
+                continue
+            outputs = self.model(
+                input_ids=batch["input_ids"],
+                images=batch["images"],
+                attention_mask=batch["attention_mask"],
+                labels=batch["labels"],
+            )
+            total_loss += outputs.loss.detach() * n_tokens
+            total_tokens += n_tokens
+
+        total_loss = self.accelerator.reduce(total_loss, reduction="sum")
+        total_tokens = self.accelerator.reduce(total_tokens, reduction="sum")
+
+        self._set_train_mode()
+        if total_tokens.item() == 0:
+            return float("nan")
+        return (total_loss / total_tokens).item()

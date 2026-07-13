@@ -4,9 +4,14 @@ The training loop (training/trainer.py) logs one line every `logging_steps` to s
 
     2026-06-27 14:02:19,364 - training.trainer - INFO - Step 10/2525 | Loss: 1.4726 | LR: 2.67e-05 | Samples/s: 15.3
 
+and, when a validation set is configured, an extra line every `eval_steps`:
+
+    2026-06-27 14:05:41,002 - training.trainer - INFO - Step 100/2525 | Val loss: 1.5210
+
 That stdout capture is the canonical metric source (no TensorBoard/W&B/CSV is written during
-training). This script parses those lines into tidy rows of (step, loss, lr, samples_per_sec),
-writes CSV + JSON, prints summary stats, and optionally renders a loss/LR curve PNG.
+training). This script parses those lines into tidy rows of (step, loss, lr, samples_per_sec) with an
+optional merged `val_loss`, writes CSV + JSON, prints summary stats, and optionally renders a curve
+PNG (train + held-out validation loss overlaid, plus LR).
 
 Usage (from repo root):
     # parse a captured log -> training_curve.csv / .json (+ .png if matplotlib is installed)
@@ -25,30 +30,47 @@ import re
 import sys
 from pathlib import Path
 
-# Matches the trainer's log line; tolerant of the logging prefix and surrounding whitespace.
+# Matches the trainer's train-loss log line; tolerant of the logging prefix and surrounding whitespace.
 STEP_RE = re.compile(
     r"Step\s+(\d+)\s*/\s*(\d+)\s*\|\s*Loss:\s*([0-9.]+)\s*\|\s*"
     r"LR:\s*([0-9.eE+\-]+)\s*\|\s*Samples/s:\s*([0-9.]+)"
 )
 
+# Matches the trainer's held-out validation line, e.g. "Step 100/2525 | Val loss: 1.5210" (also
+# "Final val loss: ..."). Logged every eval_steps; steps line up with the train-loss steps.
+VAL_RE = re.compile(r"Step\s+(\d+)\s*/\s*\d+\s*\|\s*(?:Final\s+val\s+loss|Val\s+loss):\s*([0-9.]+)")
+
 
 def parse_log(lines) -> list:
-    """Return [{step,total_steps,loss,lr,samples_per_sec}, ...] from trainer stdout lines."""
+    """Return [{step,total_steps,loss,lr,samples_per_sec[,val_loss]}, ...] from trainer stdout lines.
+
+    Train-loss and validation-loss lines are logged separately at the same step; the val loss is
+    merged onto the matching train row (and a ``val_loss`` column is added to every row only when at
+    least one validation line was seen, so logs without validation keep their original shape).
+    """
     rows = []
+    val_by_step = {}
     for line in lines:
         m = STEP_RE.search(line)
-        if not m:
+        if m:
+            step, total, loss, lr, sps = m.groups()
+            rows.append(
+                {
+                    "step": int(step),
+                    "total_steps": int(total),
+                    "loss": float(loss),
+                    "lr": float(lr),
+                    "samples_per_sec": float(sps),
+                }
+            )
             continue
-        step, total, loss, lr, sps = m.groups()
-        rows.append(
-            {
-                "step": int(step),
-                "total_steps": int(total),
-                "loss": float(loss),
-                "lr": float(lr),
-                "samples_per_sec": float(sps),
-            }
-        )
+        mv = VAL_RE.search(line)
+        if mv:
+            val_by_step[int(mv.group(1))] = float(mv.group(2))
+
+    if val_by_step:
+        for r in rows:
+            r["val_loss"] = val_by_step.get(r["step"])
     return rows
 
 
@@ -89,6 +111,12 @@ def summarize(rows: list) -> None:
     print(f"  steps logged : {len(rows)}  (step {first['step']} -> {last['step']})")
     print(f"  loss         : start {first['loss']:.4f} | final {last['loss']:.4f} | "
           f"min {min_row['loss']:.4f} @ step {min_row['step']}")
+    val_rows = [r for r in rows if r.get("val_loss") is not None]
+    if val_rows:
+        best_val = min(val_rows, key=lambda r: r["val_loss"])
+        print(f"  val loss     : final {val_rows[-1]['val_loss']:.4f} | "
+              f"best {best_val['val_loss']:.4f} @ step {best_val['step']}  "
+              f"(best-val checkpoint to keep)")
     if "samples_per_sec" in last:
         avg_sps = sum(r["samples_per_sec"] for r in rows) / len(rows)
         print(f"  throughput   : ~{avg_sps:.1f} samples/s (avg of logged points)")
@@ -107,11 +135,19 @@ def plot(rows: list, out_stem: str, title: str = "Training loss") -> None:
     steps = [r["step"] for r in rows]
     losses = [r["loss"] for r in rows]
     fig, ax1 = plt.subplots(figsize=(9, 5))
-    ax1.plot(steps, losses, color="tab:blue", label="loss")
+    ax1.plot(steps, losses, color="tab:blue", label="train loss")
     ax1.set_xlabel("update step")
-    ax1.set_ylabel("training loss", color="tab:blue")
+    ax1.set_ylabel("loss", color="tab:blue")
     ax1.tick_params(axis="y", labelcolor="tab:blue")
     ax1.grid(True, alpha=0.3)
+
+    # Overlay the held-out validation loss (if the log carried it): train falling while val flattens
+    # or rises is the overfitting signal; both still falling means more training helps.
+    val_pts = [(r["step"], r["val_loss"]) for r in rows if r.get("val_loss") is not None]
+    if val_pts:
+        vsteps, vlosses = zip(*val_pts)
+        ax1.plot(vsteps, vlosses, color="tab:green", marker="o", markersize=3, label="val loss")
+        ax1.legend(loc="upper right")
 
     if "lr" in rows[0]:
         ax2 = ax1.twinx()

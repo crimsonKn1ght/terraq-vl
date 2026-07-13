@@ -136,9 +136,18 @@ def parse_args() -> argparse.Namespace:
         "--test-fraction",
         type=float,
         default=0.0,
-        help="Hold out this fraction of IMAGES as a disjoint test split (test.json). The split "
+        help="Hold out this fraction of IMAGES from training (the held-out pool). The split "
         "is per-image (an image's caption and QA records stay together) and seeded by --seed, so "
-        "it is deterministic and reproducible. 0.0 = no test split (default).",
+        "it is deterministic and reproducible. 0.0 = no held-out split (default).",
+    )
+    parser.add_argument(
+        "--val-fraction",
+        type=float,
+        default=0.0,
+        help="Of the HELD-OUT images (see --test-fraction), route this fraction to a disjoint "
+        "validation split (val.json); the rest go to test.json. Carved from the held-out pool with a "
+        "separate seeded RNG, so the train/held-out partition is IDENTICAL to a test-only build — "
+        "adding validation only re-partitions the held-out test, never the training data. 0.0 = none.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Seed for prompt selection / split.")
     parser.add_argument(
@@ -163,10 +172,14 @@ def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)
     split_rng = random.Random(f"{args.seed}-test-split")
+    # Separate stream for the val/test sub-split so the train vs. held-out decision is unaffected by
+    # --val-fraction — the training set stays byte-identical to a test-only build.
+    val_rng = random.Random(f"{args.seed}-val-split")
 
     output_dir = Path(args.output_dir).resolve()
     image_dir = output_dir / "images"
     train_json = output_dir / f"{args.split}.json"
+    val_json = output_dir / "val.json"
     test_json = output_dir / "test.json"
 
     if train_json.exists() and not args.overwrite:
@@ -187,8 +200,10 @@ def main() -> None:
         rows = itertools.islice(rows, args.max_samples)
 
     train_records = []
+    val_records = []
     test_records = []
     train_images = 0
+    val_images = 0
     test_images = 0
     caption_count = 0
     qa_count = 0
@@ -205,9 +220,15 @@ def main() -> None:
                 img.save(image_path, format="JPEG", quality=90)
 
             # Route this image (and ALL of its records) to one side, so a held-out image
-            # never leaks across the train/test boundary.
-            is_test = args.test_fraction > 0 and split_rng.random() < args.test_fraction
-            bucket = test_records if is_test else train_records
+            # never leaks across the train/val/test boundary.
+            is_heldout = args.test_fraction > 0 and split_rng.random() < args.test_fraction
+            if is_heldout:
+                # Carve validation out of the held-out pool (val_rng keeps train unaffected).
+                is_val = args.val_fraction > 0 and val_rng.random() < args.val_fraction
+                bucket_name = "val" if is_val else "test"
+            else:
+                bucket_name = "train"
+            bucket = {"val": val_records, "test": test_records}.get(bucket_name, train_records)
             n_before = len(bucket)
 
             caption = (row.get("caption") or "").strip()
@@ -230,7 +251,9 @@ def main() -> None:
                 qa_count += len(qa)
 
             if len(bucket) > n_before:
-                if is_test:
+                if bucket_name == "val":
+                    val_images += 1
+                elif bucket_name == "test":
                     test_images += 1
                 else:
                     train_images += 1
@@ -240,6 +263,9 @@ def main() -> None:
 
     with train_json.open("w", encoding="utf-8") as f:
         json.dump(train_records, f, ensure_ascii=False, indent=2)
+    if val_records:
+        with val_json.open("w", encoding="utf-8") as f:
+            json.dump(val_records, f, ensure_ascii=False, indent=2)
     if args.test_fraction > 0:
         with test_json.open("w", encoding="utf-8") as f:
             json.dump(test_records, f, ensure_ascii=False, indent=2)
@@ -248,6 +274,8 @@ def main() -> None:
     print(f"Caption records: {caption_count}")
     print(f"QA records:      {qa_count}")
     print(f"Train: {len(train_records)} records / {train_images} images -> {train_json}")
+    if val_records:
+        print(f"Val:   {len(val_records)} records / {val_images} images -> {val_json}")
     if args.test_fraction > 0:
         print(f"Test:  {len(test_records)} records / {test_images} images -> {test_json}")
     print(f"Rows skipped:    {skipped}")

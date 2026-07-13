@@ -101,6 +101,45 @@ accelerate launch train.py --config configs/pretrain_stage1.yaml
 
 Training logs appear in stdout. Checkpoints are saved every 500 steps to `./checkpoints/pretrain-stage1/`.
 
+**Reading the loss.** The logged training loss is a **token-weighted** running mean (weighted by each
+micro-batch's supervised-token count), so a one-word VQA answer no longer jitters the curve like a
+long caption — the line tracks the real trend instead of bouncing per step.
+
+**Validation loss (overfitting / when to stop).** Use a **three-way split** — train / validation /
+test. The builders carve a disjoint validation split **out of the held-out pool** with `--val-fraction`,
+so `val.json` is used *during* training while `test.json` stays untouched for final evaluation (never
+select on the test set). Crucially, the training data is byte-identical to a test-only build, so a
+Stage-1 connector trained without validation stays valid when you warm-start Stage 2:
+
+```bash
+# Hold out 2% of images, split evenly into val + test (disjoint by image); train unchanged.
+# Use the SAME --test-fraction your Stage-1 build used, so the val/test images are exactly the ones
+# Stage 1 never saw (a Stage-2 run warm-started from that connector then has no leakage).
+python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
+    --test-fraction 0.02 --val-fraction 0.5
+
+# Already built the images? Re-split the JSON only (no 8.4 GB re-download, images untouched):
+python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
+    --test-fraction 0.02 --val-fraction 0.5 --no-images --overwrite
+```
+
+Point `data.val_data_path` at that `val.json` and the trainer scores it every `training.eval_steps`,
+logging a `Val loss:` line and recording it in each checkpoint's `meta.json`:
+
+```yaml
+data:
+  val_data_path: datasets/vrsbench_llava/val.json    # disjoint validation split (NOT test.json)
+training:
+  eval_steps: 100        # validation-loss cadence (defaults to save_steps)
+  eval_num_samples: 512  # cap scored samples per eval for speed (0 = all)
+```
+
+Overlay both curves with `python scripts/plot_training_curve.py train.log --out curve --plot`:
+train falling while val flattens or rises is overfitting (keep the **best-val** checkpoint, which the
+script prints); both still falling means more training would help. This is the same token-weighted,
+fixed-set method as the offline [`scripts/eval_loss_curve.py`](scripts/eval_loss_curve.py), now
+computed live during the run. Run that offline script on `test.json` for the final held-out number.
+
 ### 4. Inference
 
 ```bash

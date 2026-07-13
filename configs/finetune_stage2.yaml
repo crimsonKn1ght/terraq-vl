@@ -21,6 +21,8 @@ stage1_checkpoint: ./checkpoints/sample-stage1/checkpoint-1   # trained Stage-1 
 data:
   train_data_path: datasets/llava_recap_558k/train.json
   image_dir: datasets/llava_recap_558k/images
+  # val_data_path: datasets/llava_recap_558k/val.json   # disjoint validation split -> validation loss
+  # val_image_dir: datasets/llava_recap_558k/images     # defaults to image_dir
   max_length: 512
 training:
   stage: 2
@@ -37,4 +39,6 @@ training:
   dataloader_num_workers: 0
   logging_steps: 1
   save_steps: 1
+  # eval_steps: 1            # held-out validation cadence (needs data.val_data_path above)
+  # eval_num_samples: 512    # cap held-out samples scored per eval (0 = all)
   seed: 42
