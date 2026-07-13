@@ -74,6 +74,21 @@ Pass the matching stage config so the (Stage-2) LoRA structure is built before t
 Rebuild the exact training images from VRSBench with
 `scripts/build_vrsbench_trainset.py --seed 42` — `val.json` / `test.json` here pin the held-out sets.
 
+## Citation
+
+```bibtex
+@misc{gourab_roy_2026,
+	author       = { Gourab Roy },
+	title        = { terraq-vl (Revision f7ddb21) },
+	year         = 2026,
+	url          = { https://huggingface.co/grKnight/terraq-vl },
+	doi          = { 10.57967/hf/9584 },
+	publisher    = { Hugging Face }
+}
+```
+
+DOI: [10.57967/hf/9584](https://doi.org/10.57967/hf/9584)
+
 ## License — research / non-commercial
 
 The **code** (on GitHub) is MIT, but these **trained weights are not**: they are LoRA-adapted from

@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: >-
+  If you use this code, please cite the repository below. If you use the
+  released TerraQ-VL model checkpoints, please also cite the Hugging Face DOI
+  listed under identifiers.
+title: TerraQ-VL
+authors:
+  - family-names: Roy
+    given-names: Gourab
+repository-code: "https://github.com/crimsonKn1ght/TerraQ-VL"
+url: "https://github.com/crimsonKn1ght/TerraQ-VL"
+license: MIT
+identifiers:
+  - type: doi
+    value: "10.57967/hf/9584"
+    description: >-
+      Released TerraQ-VL model checkpoints (grKnight/terraq-vl on Hugging
+      Face, revision f7ddb21) — the trained weights, not this source code
+      repository. See https://huggingface.co/grKnight/terraq-vl.

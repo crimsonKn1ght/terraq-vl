@@ -737,6 +737,27 @@ Further extensions might include:
 - **CLIP**: [Learning Transferable Models for Compositional Vision](https://arxiv.org/abs/2103.14030)
 - **Qwen**: [Qwen2.5 Technical Report](https://qwenlm.github.io/blog/qwen2.5/)
 
+## Citation
+
+The **released TerraQ-VL (VRSBench) model checkpoints** — [`grKnight/terraq-vl`](https://huggingface.co/grKnight/terraq-vl) —
+have a Hugging Face-issued DOI. Cite this if you use those weights (distinct from citing the codebase
+itself, which GitHub's "Cite this repository" button covers via [`CITATION.cff`](CITATION.cff)):
+
+```bibtex
+@misc{gourab_roy_2026,
+	author       = { Gourab Roy },
+	title        = { terraq-vl (Revision f7ddb21) },
+	year         = 2026,
+	url          = { https://huggingface.co/grKnight/terraq-vl },
+	doi          = { 10.57967/hf/9584 },
+	publisher    = { Hugging Face }
+}
+```
+
+DOI: **[10.57967/hf/9584](https://doi.org/10.57967/hf/9584)**. The AstraQ-VL (astronomy) checkpoints
+do not currently have a separate DOI; cite [`grKnight/astraq-vl-stage1`](https://huggingface.co/grKnight/astraq-vl-stage1)/
+[`-stage2`](https://huggingface.co/grKnight/astraq-vl-stage2) by URL until one is minted.
+
 ## License
 
 The **code in this repository** is released under the **MIT License** — see the [`LICENSE`](LICENSE)
