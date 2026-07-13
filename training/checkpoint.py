@@ -17,12 +17,15 @@ def save_connector_checkpoint(
     loss: float,
     output_dir: str,
     peft_model: Optional[nn.Module] = None,
+    val_loss: Optional[float] = None,
 ) -> str:
     """Write a ``checkpoint-<step>/`` dir with the connector, training state, and meta.
 
     Saves ``connector.safetensors`` (always) plus ``training_state.pt`` and ``meta.json``. In Stage 2
     (``peft_model`` given) also saves the LoRA adapter under ``lora/``; Stage-1 dirs omit it and stay
-    byte-compatible. Returns the checkpoint directory path.
+    byte-compatible. When ``val_loss`` is given it is recorded in ``meta.json`` alongside the (noisy,
+    single-micro-batch) training ``loss``, so checkpoint selection can key on the held-out number.
+    Returns the checkpoint directory path.
     """
     checkpoint_dir = os.path.join(output_dir, f"checkpoint-{step}")
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -43,6 +46,8 @@ def save_connector_checkpoint(
     )
 
     meta = {"step": step, "loss": loss}
+    if val_loss is not None:
+        meta["val_loss"] = val_loss
     with open(os.path.join(checkpoint_dir, "meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
 

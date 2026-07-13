@@ -17,6 +17,11 @@ This implementation bridges a frozen CLIP vision encoder (`openai/clip-vit-large
 > See [Trained Model: AstraQ-VL Stage-1](#trained-model-astraq-vl-stage-1-astronomy) and
 > [Stage 2: Visual Instruction Tuning (LoRA)](#astraq-vl-stage-2-visual-instruction-tuning-lora) for dataset,
 > training, testing, and download details.
+>
+> The **remote-sensing** counterpart (Qwen2.5-3B + VRSBench) is released at
+> **[`grKnight/terraq-vl`](https://huggingface.co/grKnight/terraq-vl)** — every Stage-1 and Stage-2
+> checkpoint, configs, held-out loss curves, and predictions. See
+> [Trained Model: TerraQ-VL (Remote Sensing / VRSBench)](#trained-model-terraq-vl-remote-sensing--vrsbench).
 
 ## Architecture
 
@@ -100,6 +105,45 @@ accelerate launch train.py --config configs/pretrain_stage1.yaml
 ```
 
 Training logs appear in stdout. Checkpoints are saved every 500 steps to `./checkpoints/pretrain-stage1/`.
+
+**Reading the loss.** The logged training loss is a **token-weighted** running mean (weighted by each
+micro-batch's supervised-token count), so a one-word VQA answer no longer jitters the curve like a
+long caption — the line tracks the real trend instead of bouncing per step.
+
+**Validation loss (overfitting / when to stop).** Use a **three-way split** — train / validation /
+test. The builders carve a disjoint validation split **out of the held-out pool** with `--val-fraction`,
+so `val.json` is used *during* training while `test.json` stays untouched for final evaluation (never
+select on the test set). Crucially, the training data is byte-identical to a test-only build, so a
+Stage-1 connector trained without validation stays valid when you warm-start Stage 2:
+
+```bash
+# Hold out 2% of images, split evenly into val + test (disjoint by image); train unchanged.
+# Use the SAME --test-fraction your Stage-1 build used, so the val/test images are exactly the ones
+# Stage 1 never saw (a Stage-2 run warm-started from that connector then has no leakage).
+python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
+    --test-fraction 0.02 --val-fraction 0.5
+
+# Already built the images? Re-split the JSON only (no 8.4 GB re-download, images untouched):
+python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
+    --test-fraction 0.02 --val-fraction 0.5 --no-images --overwrite
+```
+
+Point `data.val_data_path` at that `val.json` and the trainer scores it every `training.eval_steps`,
+logging a `Val loss:` line and recording it in each checkpoint's `meta.json`:
+
+```yaml
+data:
+  val_data_path: datasets/vrsbench_llava/val.json    # disjoint validation split (NOT test.json)
+training:
+  eval_steps: 100        # validation-loss cadence (defaults to save_steps)
+  eval_num_samples: 512  # cap scored samples per eval for speed (0 = all)
+```
+
+Overlay both curves with `python scripts/plot_training_curve.py train.log --out curve --plot`:
+train falling while val flattens or rises is overfitting (keep the **best-val** checkpoint, which the
+script prints); both still falling means more training would help. This is the same token-weighted,
+fixed-set method as the offline [`scripts/eval_loss_curve.py`](scripts/eval_loss_curve.py), now
+computed live during the run. Run that offline script on `test.json` for the final held-out number.
 
 ### 4. Inference
 
@@ -452,6 +496,84 @@ aggregate metrics, per-sample metrics, and reproduction notes for that model fam
 For preprint-strength analysis, run the offline workflow in
 `docs/preprint_offline_analysis.md`: paired bootstrap confidence intervals, AstroLLaVA skipped-row
 inspection, honestly mined qualitative examples, and a 100-200 item human/LLM judge sample.
+
+## Trained Model: TerraQ-VL (Remote Sensing / VRSBench)
+
+The remote-sensing counterpart of AstraQ-VL — same CLIP + Qwen2.5-3B + MLP-connector architecture,
+ported to aerial/satellite imagery. **Every** Stage-1 and Stage-2 checkpoint (not just a
+representative few), configs, held-out loss curves, and predictions are released on the Hub:
+
+**https://huggingface.co/grKnight/terraq-vl**
+
+```
+stage-1/checkpoints/checkpoint-100 … checkpoint-3270   (33 checkpoints, connector-only)
+stage-2/checkpoints/checkpoint-200 … checkpoint-2180   (connector + LoRA adapter)
+stage-1/  stage-2/   each also: config/  curves/  predictions/  data/  MODEL_CARD.md  manifest.json
+```
+
+Checkpoints are stored as **raw, directly-loadable directories** (no unzip needed) — each Stage-1
+dir has `connector.safetensors` + `training_state.pt` + `meta.json`; each Stage-2 dir adds
+`lora/adapter_model.safetensors` + `lora/adapter_config.json`. `manifest.json` lists every file with
+its sha256. See each `stage-*/MODEL_CARD.md` on the Hub for the exact per-checkpoint train + held-out
+validation loss.
+
+### Dataset (three-way, disjoint-by-image split)
+
+Training used [`xiang709/VRSBench`](https://huggingface.co/datasets/xiang709/VRSBench)
+(CC-BY-NC-4.0): ~29.6k aerial/satellite images (DOTA-v2 / DIOR via Google Earth) with a
+human-verified detailed caption plus visual question–answer turns. `scripts/build_vrsbench_trainset.py`
+carves a **validation** split out of the held-out pool (`--val-fraction`) *in addition to* the test
+split, so validation never touches the test set and training data is unaffected:
+
+```bash
+python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
+  --test-fraction 0.02 --val-fraction 0.5 --max-image-size 384 --seed 42
+```
+
+| Split | Images | Records |
+|-------|-------:|--------:|
+| train (`train.json`) | 19,861 | 139,575 |
+| validation (`val.json`) | 204 | 1,448 |
+| held-out test (`test.json`) | 197 | 1,367 |
+
+The split is per **image** (seeded, deterministic) — an image's caption and all its VQA turns stay
+together, so there is no leakage between train / val / test.
+
+### Stage 1 — connector alignment
+
+Config: `configs/pretrain_vrsbench.yaml`; run `python train.py --config configs/pretrain_vrsbench.yaml`.
+
+| Setting | Value |
+|---------|-------|
+| Trainable | connector only (~4.2M params, vision + LLM frozen) |
+| Epochs / steps | 3 epochs, 3,270 update steps |
+| Effective batch | 128 (per-device 8 × grad-accum 16) |
+| Learning rate / schedule | 1e-3, cosine, 3% warmup |
+| Precision | bf16 |
+| Held-out validation loss | **1.7933 → 1.2091** (monotonic, token-weighted, recomputed on 512 held-out `val.json` samples via [`scripts/eval_loss_curve.py`](scripts/eval_loss_curve.py)) |
+
+`checkpoint-3270` (final) is the recommended Stage-1 weight and the one Stage-2 warm-starts from.
+
+### Stage 2 — visual instruction tuning (LoRA)
+
+Config: `configs/finetune_vrsbench_stage2.yaml`; run `python train.py --config configs/finetune_vrsbench_stage2.yaml`
+after pointing `stage1_checkpoint` at the Stage-1 checkpoint above.
+
+| Setting | Value |
+|---------|-------|
+| Trainable | connector (warm-started) + LoRA on the LLM (r=16, α=32, dropout=0.05; q/k/v/o/gate/up/down_proj) — 36.2M / 3.42B params (1.06%) |
+| Epochs / steps | 1 epoch, 2,180 update steps |
+| Effective batch | 64 (per-device 8 × grad-accum 8), gradient checkpointing |
+| Learning rate / schedule | 2e-4, cosine, 3% warmup |
+| Precision | bf16 |
+| Hardware tested | L40S (48 GB) and RTX PRO 6000 Blackwell (96 GB) |
+
+Held-out predictions cover all 1,367 `test.json` records (captions **and** VQA turns, each asked its
+own question) via [`scripts/generate_heldout_records.py`](scripts/generate_heldout_records.py) — see
+`stage-2/predictions/` on the Hub.
+
+Trained-weight license: **research / non-commercial** (Qwen Research License + VRSBench
+CC-BY-NC-4.0) — see [Model & Data Licensing](#model--data-licensing) for the full breakdown.
 
 ## Medical RAG Layer (Retrieval-Augmented Grounding)
 

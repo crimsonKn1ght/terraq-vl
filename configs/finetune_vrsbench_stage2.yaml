@@ -31,21 +31,25 @@ stage1_checkpoint: ./checkpoints/vrsbench-stage1/checkpoint-XXXX
 data:
   train_data_path: datasets/vrsbench_llava/train.json
   image_dir: datasets/vrsbench_llava/images
+  val_data_path: datasets/vrsbench_llava/val.json    # disjoint validation split (builder --val-fraction)
+  # val_image_dir: datasets/vrsbench_llava/images     # defaults to image_dir (all splits share images/)
   max_length: 512            # +256 image tokens -> ~768 effective seq
 training:
   stage: 2                   # connector + LoRA (Stage 1 = connector only)
   output_dir: ./checkpoints/vrsbench-stage2
   num_epochs: 1              # instruction-tuning convention (single pass over caption + VQA)
-  per_device_batch_size: 2   # 3B full-LLM backward pass is the memory driver; start at 2, raise if it fits
-  gradient_accumulation_steps: 32  # effective batch = 64
-  gradient_checkpointing: true     # required to fit the 3B LLM backward pass
-  learning_rate: 0.0002      # LoRA + connector
+  per_device_batch_size: 8   # tuned for a 96 GB card (RTX PRO 6000); drop to 4 on 48 GB (L40S), 2 on 24 GB
+  gradient_accumulation_steps: 8   # keep batch*accum = 64 (effective batch unchanged -> same LR schedule)
+  gradient_checkpointing: true     # keep on to fit the 3B backward; set false for more speed if VRAM allows
+  learning_rate: 0.0002      # LoRA + connector (tuned for effective batch 64 — rescale if you change it)
   # connector_lr: 0.00005    # (optional) give the pretrained connector a lower LR than fresh LoRA
   warmup_ratio: 0.03
   weight_decay: 0.0
   max_grad_norm: 1.0
-  bf16: true                 # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series)
-  dataloader_num_workers: 8
+  bf16: true                 # requires an Ampere-or-newer GPU (RTX 30xx/40xx, A-series, L40S, Blackwell)
+  dataloader_num_workers: 16   # 32 vCPUs can feed the larger batches; lower to 8 if CPU-bound
   logging_steps: 10
   save_steps: 200
+  eval_steps: 200            # held-out (validation) loss cadence; matches save_steps so each ckpt logs val
+  eval_num_samples: 512      # cap held-out samples scored per eval for speed (0 = score all of val.json)
   seed: 42
