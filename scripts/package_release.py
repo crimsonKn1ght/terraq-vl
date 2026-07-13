@@ -95,6 +95,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", default="release", help="Parent output dir (default: release/).")
     p.add_argument("--repo-url", default="https://github.com/crimsonKn1ght/TerraQ-VL",
                    help="Source repo URL for provenance.")
+    p.add_argument(
+        "--no-checkpoint-zip",
+        action="store_true",
+        help="Do not copy/zip the checkpoints into the bundle (and skip the whole-bundle zip). Use "
+        "when uploading ALL checkpoints as raw dirs separately (e.g. via upload_to_hf.py) to avoid "
+        "duplicating gigabytes on disk and on the Hub. The model card still reads each meta.json.",
+    )
     return p.parse_args()
 
 
@@ -137,7 +144,9 @@ def build_model_card(args, ckpts, cfg, bundle: Path) -> str:
         f"- Validation: every {tr.get('eval_steps', tr.get('save_steps', '?'))} steps on the "
         f"disjoint `val.json` split (token-weighted loss).",
         "",
-        "## Checkpoints (see `checkpoints/*.zip`)",
+        "## Checkpoints ("
+        + ("raw dirs under `checkpoints/`" if args.no_checkpoint_zip else "zipped under `checkpoints/`")
+        + ")",
         "",
         "| checkpoint | train loss | val loss |",
         "|---|---|---|",
@@ -154,7 +163,9 @@ def build_model_card(args, ckpts, cfg, bundle: Path) -> str:
     lines += [
         "",
         "## Contents",
-        "- `checkpoints/` — zipped checkpoint dir(s): `connector.safetensors`"
+        "- `checkpoints/` — "
+        + ("raw checkpoint dir(s)" if args.no_checkpoint_zip else "zipped checkpoint dir(s)")
+        + ": `connector.safetensors`"
         + (" + `lora/` adapter" if args.stage == 2 else "")
         + " + `training_state.pt` + `meta.json`",
         "- `config/` — the exact training/inference config YAML",
@@ -187,18 +198,24 @@ def main() -> None:
     bundle = out_parent / args.title
     if bundle.exists():
         shutil.rmtree(bundle)
-    for sub in ("checkpoints", "config", "curves", "predictions", "logs", "data"):
+    subdirs = ["config", "curves", "predictions", "logs", "data"]
+    if not args.no_checkpoint_zip:
+        subdirs.insert(0, "checkpoints")
+    for sub in subdirs:
         (bundle / sub).mkdir(parents=True, exist_ok=True)
 
     # Config
     shutil.copy2(args.config, bundle / "config" / Path(args.config).name)
 
-    # Checkpoints -> one zip each (so best-val and final stay separately downloadable)
+    # Checkpoints -> one zip each (so best-val and final stay separately downloadable). With
+    # --no-checkpoint-zip we only validate them (the card still reports each meta.json) and leave the
+    # raw dirs to be uploaded separately — no gigabytes duplicated on disk or on the Hub.
     for ckpt in args.checkpoint:
         ckpt_path = Path(ckpt)
         if not (ckpt_path / "connector.safetensors").exists():
             raise SystemExit(f"MISSING connector.safetensors in {ckpt_path} — is training done / path right?")
-        zip_dir(ckpt_path, bundle / "checkpoints" / f"{ckpt_path.name}.zip")
+        if not args.no_checkpoint_zip:
+            zip_dir(ckpt_path, bundle / "checkpoints" / f"{ckpt_path.name}.zip")
 
     # Curves (produced beforehand by plot_training_curve.py --out <stem> --plot)
     if args.curve_stem:
@@ -233,16 +250,16 @@ def main() -> None:
             )
     (bundle / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
-    # Whole-bundle zip alongside the folder
-    top_zip = out_parent / f"{args.title}.zip"
-    if top_zip.exists():
-        top_zip.unlink()
-    zip_dir(bundle, top_zip)
-
+    # Whole-bundle zip alongside the folder (skipped when checkpoints live outside the bundle —
+    # re-zipping only the light artifacts adds little, and with big checkpoints it would double GBs).
     total_mb = sum(m["bytes"] for m in manifest) / 1e6
-    print(f"\nPackaged {len(manifest)} files ({total_mb:.1f} MB) into:")
-    print(f"  folder: {bundle}")
-    print(f"  zip:    {top_zip}")
+    print(f"\nPackaged {len(manifest)} files ({total_mb:.1f} MB) into folder: {bundle}")
+    if not args.no_checkpoint_zip:
+        top_zip = out_parent / f"{args.title}.zip"
+        if top_zip.exists():
+            top_zip.unlink()
+        zip_dir(bundle, top_zip)
+        print(f"  whole-bundle zip: {top_zip}")
     print(f"\nUpload with:\n  python scripts/upload_to_hf.py --repo-id <user>/{args.title} --path {bundle}")
 
 
