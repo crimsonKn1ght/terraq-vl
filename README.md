@@ -1,13 +1,13 @@
-# AstraQ-VL: Vision-Language Model (VLM) — Stage 1 Alignment + Stage 2 Instruction Tuning
+# AstraQ-VL: Vision-Language Model (VLM) - Stage 1 Alignment + Stage 2 Instruction Tuning
 
-AstraQ-VL is a minimal, efficient astronomy Vision-Language Model following the LLaVA architecture. **Stage 1** trains only a lightweight MLP connector to align frozen CLIP vision features with a frozen LLM. **Stage 2** then warm-starts that connector and fine-tunes the LLM with LoRA adapters on instruction (QA) data — closing the gap between coarse grounding and factual specificity, at minimal computational cost.
+AstraQ-VL is a minimal, efficient astronomy Vision-Language Model following the LLaVA architecture. **Stage 1** trains only a lightweight MLP connector to align frozen CLIP vision features with a frozen LLM. **Stage 2** then warm-starts that connector and fine-tunes the LLM with LoRA adapters on instruction (QA) data, closing the gap between coarse grounding and factual specificity, at minimal computational cost.
 
 ## Overview
 
 This implementation bridges a frozen CLIP vision encoder (`openai/clip-vit-large-patch14`) and a frozen instruction-tuned LLM (`Qwen/Qwen2.5-1.5B-Instruct`) using a simple 2-layer MLP connector. Only the connector (~3.9M parameters) is trained on image-caption pairs; both the vision encoder and LLM remain frozen throughout training.
 
 **Key Design Principles:**
-- **Simplicity**: No Q-Former, no cross-attention — just a linear projection with GELU
+- **Simplicity**: No Q-Former, no cross-attention, just a linear projection with GELU
 - **Efficiency**: Frozen models save memory; only train the connector
 - **Proven approach**: Follows LLaVA Stage 1 alignment, a well-validated recipe
 
@@ -19,7 +19,7 @@ This implementation bridges a frozen CLIP vision encoder (`openai/clip-vit-large
 > training, testing, and download details.
 >
 > The **remote-sensing** counterpart (Qwen2.5-3B + VRSBench) is released at
-> **[`grKnight/terraq-vl`](https://huggingface.co/grKnight/terraq-vl)** — every Stage-1 and Stage-2
+> **[`grKnight/terraq-vl`](https://huggingface.co/grKnight/terraq-vl)**: every Stage-1 and Stage-2
 > checkpoint, configs, held-out loss curves, and predictions. See
 > [Trained Model: TerraQ-VL (Remote Sensing / VRSBench)](#trained-model-terraq-vl-remote-sensing--vrsbench).
 
@@ -30,13 +30,13 @@ This implementation bridges a frozen CLIP vision encoder (`openai/clip-vit-large
 ```
 Image (3, 224, 224)
     ↓
-[CLIP ViT-L/14 — Frozen] → 256 patch tokens (B, 256, 1024)
+[CLIP ViT-L/14: Frozen] → 256 patch tokens (B, 256, 1024)
     ↓
-[MLP Connector — Trainable] → (B, 256, 1536)
+[MLP Connector: Trainable] → (B, 256, 1536)
     ↓ (concatenated with)
 Text Embeddings (B, T, 1536) from LLM embedding table
     ↓
-[Qwen2.5-1.5B-Instruct — Frozen] → Loss
+[Qwen2.5-1.5B-Instruct: Frozen] → Loss
 ```
 
 **Training objective**: Next-token prediction on image-text pairs. Visual tokens are masked out of the loss; only the caption tokens contribute to gradient updates on the connector.
@@ -55,7 +55,7 @@ pip install -r requirements.txt
 - Python ≥ 3.10
 - PyTorch ≥ 2.1.0
 - CUDA 11.8+ (for GPU training)
-- GPU memory scales with caption length: short-caption datasets (e.g. LLaVA-Pretrain) are light, while the AstraQ-VL Stage-1 run (long captions + QA, batch 8) measured **~38 GB** on an RTX 6000 Ada — see [Trained Model: AstraQ-VL Stage-1](#trained-model-astraq-vl-stage-1-astronomy)
+- GPU memory scales with caption length: short-caption datasets (e.g. LLaVA-Pretrain) are light, while the AstraQ-VL Stage-1 run (long captions + QA, batch 8) measured **~38 GB** on an RTX 6000 Ada, see [Trained Model: AstraQ-VL Stage-1](#trained-model-astraq-vl-stage-1-astronomy)
 
 ## Quick Start
 
@@ -108,9 +108,9 @@ Training logs appear in stdout. Checkpoints are saved every 500 steps to `./chec
 
 **Reading the loss.** The logged training loss is a **token-weighted** running mean (weighted by each
 micro-batch's supervised-token count), so a one-word VQA answer no longer jitters the curve like a
-long caption — the line tracks the real trend instead of bouncing per step.
+long caption; the line tracks the real trend instead of bouncing per step.
 
-**Validation loss (overfitting / when to stop).** Use a **three-way split** — train / validation /
+**Validation loss (overfitting / when to stop).** Use a **three-way split**: train / validation /
 test. The builders carve a disjoint validation split **out of the held-out pool** with `--val-fraction`,
 so `val.json` is used *during* training while `test.json` stays untouched for final evaluation (never
 select on the test set). Crucially, the training data is byte-identical to a test-only build, so a
@@ -197,17 +197,17 @@ vlm/
 
 **Trainable Parameters**: ~3.9M (only the MLP connector)
 **Frozen Parameters**: ~1.8B (CLIP + LLM)
-**GPU Memory**: ~6–8 GB (batch_size=8, bf16) for short-caption datasets like LLaVA-Pretrain. Memory scales with sequence length: the AstraQ-VL Stage-1 run (long captions + QA, `max_length 512`) measured **~38 GB at batch_size=8** on an RTX 6000 Ada — plan on a 40 GB+ GPU at that batch, or a smaller batch / shorter `max_length` on 24 GB.
+**GPU Memory**: ~6–8 GB (batch_size=8, bf16) for short-caption datasets like LLaVA-Pretrain. Memory scales with sequence length: the AstraQ-VL Stage-1 run (long captions + QA, `max_length 512`) measured **~38 GB at batch_size=8** on an RTX 6000 Ada; plan on a 40 GB+ GPU at that batch, or a smaller batch / shorter `max_length` on 24 GB.
 
 For measured throughput and training time on real data, see [Trained Model: AstraQ-VL Stage-1](#trained-model-astraq-vl-stage-1-astronomy) (~26 samples/s on an RTX 6000 Ada).
 
 ## What Gets Trained
 
 Only the connector's weights are updated:
-- `model.connector.mlp[0].weight` — (1536, 1024)
-- `model.connector.mlp[0].bias` — (1536,)
-- `model.connector.mlp[2].weight` — (1536, 1536)
-- `model.connector.mlp[2].bias` — (1536,)
+- `model.connector.mlp[0].weight`: (1536, 1024)
+- `model.connector.mlp[0].bias`: (1536,)
+- `model.connector.mlp[2].weight`: (1536, 1536)
+- `model.connector.mlp[2].bias`: (1536,)
 
 Both the vision encoder (`vision_encoder.model`) and LLM (`language_model.model`) are frozen via `requires_grad=False`.
 
@@ -239,7 +239,7 @@ The AstraQ-VL Stage-1 connector trained with this codebase is released on the Hu
 
 It was trained for **3 full epochs** on real astronomy image–text data, with a **disjoint held-out
 test split** carved out before training so the connector can be evaluated on images it never saw.
-Three per-epoch bundles are published — each contains that epoch's checkpoint, its **held-out**
+Three per-epoch bundles are published: each contains that epoch's checkpoint, its **held-out**
 predictions, the training config, the `test.json` split, and a `REPRODUCE.md`:
 
 | Bundle | Checkpoint | |
@@ -249,12 +249,12 @@ predictions, the training config, the `test.json` split, and a `REPRODUCE.md`:
 | [`astraq-vl-stage1-ep1.zip`](https://huggingface.co/grKnight/astraq-vl-stage1/blob/main/astraq-vl-stage1-ep1.zip) | `checkpoint-1300` (≈ epoch 1) | |
 
 Each checkpoint is the connector only (`connector.safetensors`, ~16 MB) plus optimizer state. It
-is **not** a standalone `transformers` model — it requires this repository's code and the two base
+is **not** a standalone `transformers` model: it requires this repository's code and the two base
 models (downloaded from the Hub) to run.
 
 > **Superseded files.** An earlier release (`*-legacy-1epoch-no-heldout-*`) was trained to ~1 epoch
 > only and evaluated on training images (no held-out split, so possible leakage). It is kept for
-> record only — use the `ep1`/`ep2`/`ep3` bundles above.
+> record only; use the `ep1`/`ep2`/`ep3` bundles above.
 
 ### Dataset (with held-out test split)
 
@@ -270,7 +270,7 @@ python scripts/build_astrollava_trainset.py \
   --include-qa --max-image-size 384 --test-fraction 0.02 --seed 42
 ```
 
-- The split is **per image**, so an image's caption and all its QA records stay on the same side —
+- The split is **per image**, so an image's caption and all its QA records stay on the same side;
   there is no train/test leakage.
 - `--max-image-size 384` caps the long edge (CLIP uses 224×224 regardless) and re-encodes as JPEG;
   oversized (>100 MP) and unreadable frames are skipped rather than aborting the run.
@@ -330,14 +330,14 @@ epochs showed a clear, monotonic improvement **epoch 1 → 2 → 3**:
 | Star trails (Earth's rotation) | "Milky Way disk" ✗ | "star trails … rotation" ✓ | "star trails … observatory" ✓ |
 
 Epoch 1 misidentified all three (and produced an obvious hallucination); epoch 2 fixed the object
-*category* on all three; epoch 3 additionally recovered the *specific* object on two — the SN 1987A
-ring and the Dumbbell Nebula by name — on images it never trained on. Because the test set is held
+*category* on all three; epoch 3 additionally recovered the *specific* object on two (the SN 1987A
+ring and the Dumbbell Nebula by name) on images it never trained on. Because the test set is held
 out, that gain is genuine generalization, not memorization: the extra epochs paid off, and
 `checkpoint-3789` (epoch 3) is the recommended weight.
 
 **Limitation (Stage-1 ceiling).** The connector grounds on *coarse* visual structure (object class /
-morphology) but still **hallucinates fine specifics** — catalog numbers, instruments, dates,
-distances — filled from the frozen LLM's prior. More Stage-1 epochs do not remove this; a **Stage-2**
+morphology) but still **hallucinates fine specifics** (catalog numbers, instruments, dates,
+distances) filled from the frozen LLM's prior. More Stage-1 epochs do not remove this; a **Stage-2**
 fine-tune (unfreezing the LLM, e.g. LoRA, on the QA pairs) is the next step. Note this is a
 qualitative spot check on a few held-out samples, not a full quantitative benchmark.
 
@@ -351,7 +351,7 @@ exact train/test partition.
 ## AstraQ-VL Stage 2: Visual Instruction Tuning (LoRA)
 
 Stage 1 trains only the connector, so it grounds *coarse* visual structure but **hallucinates fine
-specifics** (catalog numbers, instruments, dates, distances) — the frozen LLM fills those from its
+specifics** (catalog numbers, instruments, dates, distances): the frozen LLM fills those from its
 prior. **Stage 2** addresses that ceiling: it warm-starts the Stage-1 connector and keeps training
 it **while fine-tuning the Qwen LLM with LoRA adapters** on the same caption + QA data. The vision
 encoder stays frozen.
@@ -377,7 +377,7 @@ A single bundle
 holds the final checkpoint (`checkpoint-2526`: `connector.safetensors` **+** `lora/adapter_model.safetensors`
 & `adapter_config.json`), the **held-out** predictions (`predictions_test_stage2.jsonl`), the training
 config, the `test.json` split, and a `REPRODUCE.md`. Like Stage-1 it is **not** a standalone
-`transformers` model — it needs this repo's code, the two base models (auto-downloaded), and `peft`.
+`transformers` model: it needs this repo's code, the two base models (auto-downloaded), and `peft`.
 
 ```bash
 # download + unzip
@@ -396,8 +396,8 @@ python inference.py \
 | | |
 |---|---|
 | Trainable / total params | 22,400,000 / 1,868,879,360 (1.20%) |
-| — connector (warm-started from Stage-1 `checkpoint-3789`) | 3,935,232 |
-| — LoRA (`r=16`, `α=32`, `dropout=0.05`; `q/k/v/o/gate/up/down_proj` × 28 layers) | 18,464,768 |
+| - connector (warm-started from Stage-1 `checkpoint-3789`) | 3,935,232 |
+| - LoRA (`r=16`, `α=32`, `dropout=0.05`; `q/k/v/o/gate/up/down_proj` × 28 layers) | 18,464,768 |
 | Data | same as Stage-1: train 161,653 recs / 29,151 imgs; held-out test 591 imgs / 3,271 recs |
 | Epochs / steps | 1 epoch, 2,526 update steps |
 | Effective batch | 64 (per-device 4 × grad-accum 16) |
@@ -410,7 +410,7 @@ python inference.py \
 ![AstraQ-VL Stage-2 held-out loss curve](eval_loss_curve.png)
 
 *Held-out validation loss per checkpoint (recomputed from the saved checkpoints on 512 unseen
-`test.json` samples — the dense per-step training log wasn't retained). Monotonic 1.60 → 1.45,
+`test.json` samples, the dense per-step training log wasn't retained). Monotonic 1.60 → 1.45,
 flattening by the end of the single epoch.*
 
 ### Train
@@ -499,7 +499,7 @@ inspection, honestly mined qualitative examples, and a 100-200 item human/LLM ju
 
 ## Trained Model: TerraQ-VL (Remote Sensing / VRSBench)
 
-The remote-sensing counterpart of AstraQ-VL — same CLIP + Qwen2.5-3B + MLP-connector architecture,
+The remote-sensing counterpart of AstraQ-VL: same CLIP + Qwen2.5-3B + MLP-connector architecture,
 ported to aerial/satellite imagery. **Every** Stage-1 and Stage-2 checkpoint (not just a
 representative few), configs, held-out loss curves, and predictions are released on the Hub:
 
@@ -511,7 +511,7 @@ stage-2/checkpoints/checkpoint-200 … checkpoint-2180   (connector + LoRA adapt
 stage-1/  stage-2/   each also: config/  curves/  predictions/  data/  MODEL_CARD.md  manifest.json
 ```
 
-Checkpoints are stored as **raw, directly-loadable directories** (no unzip needed) — each Stage-1
+Checkpoints are stored as **raw, directly-loadable directories** (no unzip needed): each Stage-1
 dir has `connector.safetensors` + `training_state.pt` + `meta.json`; each Stage-2 dir adds
 `lora/adapter_model.safetensors` + `lora/adapter_config.json`. `manifest.json` lists every file with
 its sha256. See each `stage-*/MODEL_CARD.md` on the Hub for the exact per-checkpoint train + held-out
@@ -536,10 +536,10 @@ python scripts/build_vrsbench_trainset.py --output-dir datasets/vrsbench_llava \
 | validation (`val.json`) | 204 | 1,448 |
 | held-out test (`test.json`) | 197 | 1,367 |
 
-The split is per **image** (seeded, deterministic) — an image's caption and all its VQA turns stay
+The split is per **image** (seeded, deterministic): an image's caption and all its VQA turns stay
 together, so there is no leakage between train / val / test.
 
-### Stage 1 — connector alignment
+### Stage 1: connector alignment
 
 Config: `configs/pretrain_vrsbench.yaml`; run `python train.py --config configs/pretrain_vrsbench.yaml`.
 
@@ -554,14 +554,14 @@ Config: `configs/pretrain_vrsbench.yaml`; run `python train.py --config configs/
 
 `checkpoint-3270` (final) is the recommended Stage-1 weight and the one Stage-2 warm-starts from.
 
-### Stage 2 — visual instruction tuning (LoRA)
+### Stage 2: visual instruction tuning (LoRA)
 
 Config: `configs/finetune_vrsbench_stage2.yaml`; run `python train.py --config configs/finetune_vrsbench_stage2.yaml`
 after pointing `stage1_checkpoint` at the Stage-1 checkpoint above.
 
 | Setting | Value |
 |---------|-------|
-| Trainable | connector (warm-started) + LoRA on the LLM (r=16, α=32, dropout=0.05; q/k/v/o/gate/up/down_proj) — 36.2M / 3.42B params (1.06%) |
+| Trainable | connector (warm-started) + LoRA on the LLM (r=16, α=32, dropout=0.05; q/k/v/o/gate/up/down_proj), 36.2M / 3.42B params (1.06%) |
 | Epochs / steps | 1 epoch, 2,180 update steps |
 | Effective batch | 64 (per-device 8 × grad-accum 8), gradient checkpointing |
 | Learning rate / schedule | 2e-4, cosine, 3% warmup |
@@ -569,11 +569,11 @@ after pointing `stage1_checkpoint` at the Stage-1 checkpoint above.
 | Hardware tested | L40S (48 GB) and RTX PRO 6000 Blackwell (96 GB) |
 
 Held-out predictions cover all 1,367 `test.json` records (captions **and** VQA turns, each asked its
-own question) via [`scripts/generate_heldout_records.py`](scripts/generate_heldout_records.py) — see
+own question) via [`scripts/generate_heldout_records.py`](scripts/generate_heldout_records.py); see
 `stage-2/predictions/` on the Hub.
 
 Trained-weight license: **research / non-commercial** (Qwen Research License + VRSBench
-CC-BY-NC-4.0) — see [Model & Data Licensing](#model--data-licensing) for the full breakdown.
+CC-BY-NC-4.0); see [Model & Data Licensing](#model--data-licensing) for the full breakdown.
 
 ## Medical RAG Layer (Retrieval-Augmented Grounding)
 
@@ -581,20 +581,20 @@ On top of the frozen VLM, this repo includes an **inference-time retrieval-augme
 generation (RAG) pipeline** for reducing hallucination in medical visual question
 answering. It implements the research methodology in three phases:
 
-1. **Phase 1 — Baseline hallucination characterization.** Evaluate the frozen VLM on
+1. **Phase 1: Baseline hallucination characterization.** Evaluate the frozen VLM on
    **VQA-RAD** / **PathVQA** with **exact-match accuracy** *and* **NLI-based
    factual-consistency** (`eval/`).
-2. **Phase 2 — Retrieval + ablation.** Build a corpus of image-report pairs, index dense
+2. **Phase 2: Retrieval + ablation.** Build a corpus of image-report pairs, index dense
    clinical-SBERT report vectors and pooled CLIP visual embeddings in **FAISS** plus a
    **BM25** sparse index, retrieve top-k pairs and **prepend** them as a structured context
    block. Ablate **dense-visual / sparse-BM25 / hybrid (RRF + cross-encoder rerank)**
    (`retrieval/`, `corpus/`, `eval/ablation.py`).
-3. **Phase 3 — Refinements (scaffolded).** Query decomposition, adaptive context windows,
+3. **Phase 3: Refinements (scaffolded).** Query decomposition, adaptive context windows,
    modality-aware weighting are wired as inert, config-gated hooks (`ragcore/phase3_stubs.py`).
 
 **Key property:** grounding is entirely prompt-level. The retrieved references are inserted
 *after* the `<image>` token and *before* the question, so `prepare_inputs_embeds` is
-unchanged — **no retraining, no model/tokenizer/connector edits**. Model ids are
+unchanged: **no retraining, no model/tokenizer/connector edits**. Model ids are
 config-driven, so a domain-specialized medical VLM / encoder swaps in by editing
 `configs/rag_eval.yaml` only.
 
@@ -613,7 +613,7 @@ configs/rag_eval.yaml
 
 ```bash
 pip install faiss-cpu sentence-transformers rank-bm25
-# (NLI factual-consistency reuses the existing `transformers` pipeline — no extra dep.)
+# (NLI factual-consistency reuses the existing `transformers` pipeline, no extra dep.)
 ```
 
 ### Usage
@@ -635,9 +635,9 @@ python rag_inference.py --config configs/rag_eval.yaml \
 ```
 
 To use a real open corpus, set `corpus.name: roco` (verified: `eltorio/ROCO-radiology`) in
-the config and re-run `corpus.build_index`. `iu_xray` has no canonical HF mirror — set
+the config and re-run `corpus.build_index`. `iu_xray` has no canonical HF mirror: set
 `corpus.hf_id` to one you've verified. `mimic_cxr` is a credentialed stub (PhysioNet access).
-The model loader runs with an **untrained connector** when `model.checkpoint` is null — fine
+The model loader runs with an **untrained connector** when `model.checkpoint` is null, fine
 for exercising retrieval and prompt formatting; set it to a trained connector dir for
 meaningful generations.
 
@@ -663,7 +663,7 @@ Tune `configs/rag_eval_gpu.yaml`: `corpus.max_pairs` (index size), `eval.num_sam
 and `eval.modes`.
 
 > **For meaningful numbers you need a trained VLM.** With `model.checkpoint: null` the
-> connector is random and the answers (hence EM/NLI) are not meaningful — the run still
+> connector is random and the answers (hence EM/NLI) are not meaningful; the run still
 > validates the full pipeline. Train the connector first (`python train.py ...`) and set
 > `model.checkpoint`, or swap `model.config` to a fully-trained medical VLM.
 
@@ -671,11 +671,11 @@ and `eval.modes`.
 
 The pipeline is domain-agnostic; an astronomy variant ships as a worked example. The core
 (`retrieval/`, `eval/runner.py`, `eval/ablation.py`, the prepend logic, Phase-3 hooks) is
-reused **unchanged** — only domain-specific pieces were added:
+reused **unchanged**, only domain-specific pieces were added:
 
-- **Corpus:** `corpus/galaxy_zoo.py` — Galaxy10 DECaLS (`matthieulel/galaxy10_decals`,
+- **Corpus:** `corpus/galaxy_zoo.py`: Galaxy10 DECaLS (`matthieulel/galaxy10_decals`,
   verified); morphology class labels are turned into descriptive "reports".
-- **Benchmark:** `eval/astro_benchmarks.py` — VQA generated from the held-out test split
+- **Benchmark:** `eval/astro_benchmarks.py`: VQA generated from the held-out test split
   (open "what type" + balanced closed yes/no), returned as the same `VQASample`.
 - **Prompt wording:** now config-driven. `ragcore/context_format.py` reads an optional
   `prompt:` block (`system`, `references_header`, `references_footer`); medical text remains
@@ -689,8 +689,8 @@ python run_rag.py --config configs/rag_eval_astro.yaml --synthetic --num_samples
 ```
 
 What a *production* astronomy port still needs (documented, not done): swapping the CLIP
-vision tower for an astronomy model (e.g. AstroCLIP) — which is not a drop-in `CLIPVisionModel`
-and **requires retraining the connector** — plus FITS/dynamic-range image handling in
+vision tower for an astronomy model (e.g. AstroCLIP), which is not a drop-in `CLIPVisionModel`
+and **requires retraining the connector**, plus FITS/dynamic-range image handling in
 `data/image_processing.py`. Standard CLIP on RGB galaxy cutouts is adequate only for the
 prototype.
 
@@ -709,11 +709,11 @@ This implementation covers **Stage 1: Feature Alignment** and **Stage 2: Visual 
 (LoRA)** (see [Stage 2: Visual Instruction Tuning (LoRA)](#astraq-vl-stage-2-visual-instruction-tuning-lora)).
 Further extensions might include:
 
-1. **Full Model Tuning** — Unfreeze all LLM layers (instead of LoRA) for more capacity at higher VRAM cost
-2. **Cross-Attention Connector** — Replace MLP with a learned cross-attention mechanism for better spatial reasoning
-3. **Higher-Resolution Images** — Support variable image resolutions and dynamic patching
-4. **Multi-Image Support** — Handle multiple images per prompt
-5. **Evaluation** — Add benchmarks (VQA, captioning, visual reasoning tasks)
+1. **Full Model Tuning**: Unfreeze all LLM layers (instead of LoRA) for more capacity at higher VRAM cost
+2. **Cross-Attention Connector**: Replace MLP with a learned cross-attention mechanism for better spatial reasoning
+3. **Higher-Resolution Images**: Support variable image resolutions and dynamic patching
+4. **Multi-Image Support**: Handle multiple images per prompt
+5. **Evaluation**: Add benchmarks (VQA, captioning, visual reasoning tasks)
 
 ## Troubleshooting
 
@@ -739,7 +739,7 @@ Further extensions might include:
 
 ## Citation
 
-The **released TerraQ-VL (VRSBench) model checkpoints** — [`grKnight/terraq-vl`](https://huggingface.co/grKnight/terraq-vl) —
+The **released TerraQ-VL (VRSBench) model checkpoints** ([`grKnight/terraq-vl`](https://huggingface.co/grKnight/terraq-vl))
 have a Hugging Face-issued DOI. Cite this if you use those weights (distinct from citing the codebase
 itself, which GitHub's "Cite this repository" button covers via [`CITATION.cff`](CITATION.cff)):
 
@@ -760,16 +760,16 @@ do not currently have a separate DOI; cite [`grKnight/astraq-vl-stage1`](https:/
 
 ## License
 
-The **code in this repository** is released under the **MIT License** — see the [`LICENSE`](LICENSE)
+The **code in this repository** is released under the **MIT License**; see the [`LICENSE`](LICENSE)
 file (© 2026 Gourab Roy). MIT covers the source code only. The pretrained base models and the
 datasets you run it with each carry their **own** licenses, which flow through to any weights you
-train or data you redistribute — summarized in the next section.
+train or data you redistribute, summarized in the next section.
 
 ## Model & Data Licensing
 
 Your code license (MIT) and the license that binds your **trained weights / redistributed data** are
 separate. A fine-tuned checkpoint or a derived dataset is governed by the **most restrictive** of the
-base model and the training data you actually use — not by MIT.
+base model and the training data you actually use, not by MIT.
 
 | Component | Where it's used | License | Commercial use |
 |---|---|---|---|
@@ -787,20 +787,20 @@ base model and the training data you actually use — not by MIT.
 - **Astronomy backbone + Qwen2.5-1.5B** (`configs/pretrain_astraq_vl.yaml`): Apache-2.0 model +
   CC-BY-SA-4.0 data → commercial use is possible **with** attribution and share-alike on the data.
 - **Want an unrestricted/commercial project?** Use an **Apache-2.0 Qwen variant** (0.5B / 1.5B / 7B /
-  14B / 32B — the 3B and 72B are the `qwen-research` exceptions) together with a
+  14B / 32B, the 3B and 72B are the `qwen-research` exceptions) together with a
   commercially-licensed dataset.
 
 The Qwen Research License additionally forbids using the model's outputs to improve any non-Qwen LLM.
 
 **Attribution / citation.** If you release weights, data, or results, cite and attribute the
 components you used:
-- **VRSBench** — [dataset](https://huggingface.co/datasets/xiang709/VRSBench) ·
+- **VRSBench**: [dataset](https://huggingface.co/datasets/xiang709/VRSBench) ·
   [paper (arXiv:2406.12384)](https://arxiv.org/abs/2406.12384); and its image sources **DOTA-v2** and
   **DIOR**.
-- **AstroLLaVA_convos** — [`UniverseTBD/AstroLLaVA_convos`](https://huggingface.co/datasets/UniverseTBD/AstroLLaVA_convos)
+- **AstroLLaVA_convos**: [`UniverseTBD/AstroLLaVA_convos`](https://huggingface.co/datasets/UniverseTBD/AstroLLaVA_convos)
   (arXiv:2504.08583); keep the NASA APOD / ESO / Hubble caption attribution.
-- **Qwen2.5** — [Qwen2.5 Technical Report](https://qwenlm.github.io/blog/qwen2.5/) and the model's
-  license file. **CLIP** — [OpenAI CLIP](https://github.com/openai/CLIP). **LLaVA** —
+- **Qwen2.5**: [Qwen2.5 Technical Report](https://qwenlm.github.io/blog/qwen2.5/) and the model's
+  license file. **CLIP**: [OpenAI CLIP](https://github.com/openai/CLIP). **LLaVA**:
   [arXiv:2304.08485](https://arxiv.org/abs/2304.08485).
 
 > This summary is provided for convenience and is **not legal advice**. Always check each model card

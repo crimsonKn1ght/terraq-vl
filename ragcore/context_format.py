@@ -5,7 +5,7 @@ The only change versus ``inference.run_inference`` (inference.py:43) is that a t
 block of retrieved clinical references is inserted *after* the ``<image>`` token and
 *before* the question. Keeping ``<image>`` first is essential: ``prepare_inputs_embeds``
 (vlm.py:88) substitutes the 256 visual embeddings at the *first* image-token position,
-so the model, tokenizer and connector are all untouched — this is pure inference-time
+so the model, tokenizer and connector are all untouched; this is pure inference-time
 grounding with no retraining.
 """
 

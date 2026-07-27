@@ -1,10 +1,10 @@
-"""Phase-3 refinement hooks — wired into call sites but inert by default.
+"""Phase-3 refinement hooks, wired into call sites but inert by default.
 
 The research statement's Phase 3 (query decomposition, adaptive context-window
 management, modality-aware retrieval weighting) depends on the Phase-2 ablation
 findings, so these are deliberately left as identity / pass-through implementations.
 Each is gated by a ``phase3.*`` flag in ``configs/rag_eval.yaml`` (all ``false`` now),
-so enabling Phase 3 later is purely additive — no call site needs restructuring.
+so enabling Phase 3 later is purely additive; no call site needs restructuring.
 """
 
 from __future__ import annotations

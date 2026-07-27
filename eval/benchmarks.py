@@ -43,7 +43,7 @@ def get_benchmark(
     cache_dir: str = "./rag_cache",
 ) -> List[VQASample]:
     """Load up to ``n`` samples of a benchmark, caching images under ``cache_dir``."""
-    # Astronomy benchmark is generated, not a plain HF VQA set — dispatch separately.
+    # Astronomy benchmark is generated, not a plain HF VQA set: dispatch separately.
     if name == "galaxy_vqa":
         from eval.astro_benchmarks import load_galaxy_vqa
 

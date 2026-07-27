@@ -1,4 +1,4 @@
-"""Ablation (c): hybrid retrieval — dense (text + visual) ∪ sparse, fused by weighted
+"""Ablation (c): hybrid retrieval, dense (text + visual) ∪ sparse, fused by weighted
 reciprocal-rank fusion, then cross-encoder reranked.
 
 Pipeline:

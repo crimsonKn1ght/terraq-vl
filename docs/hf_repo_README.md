@@ -13,7 +13,7 @@ tags:
 - lora
 ---
 
-# TerraQ-VL — Remote-Sensing Vision-Language Model (VRSBench)
+# TerraQ-VL: Remote-Sensing Vision-Language Model (VRSBench)
 
 A LLaVA-style VLM for remote sensing: a frozen **CLIP ViT-L/14** vision encoder and a frozen
 **Qwen2.5-3B-Instruct** LLM bridged by a trainable MLP connector, trained on **VRSBench**
@@ -50,7 +50,7 @@ Checkpoints are stored as **raw, directly-loadable dirs** (no unzip needed). See
 | Trainable | MLP connector | connector (warm-started from stage-1 `checkpoint-3270`) + LoRA on Qwen |
 | Epochs / steps | 3 / 3270 | 1 / 2180 |
 | Effective batch | 128 | 64 |
-| Warm-start | — | stage-1 `checkpoint-3270` |
+| Warm-start | none | stage-1 `checkpoint-3270` |
 
 **Data split** is three-way and disjoint **by image**: train / `val.json` (validation, used during
 training) / `test.json` (held out for final eval only, never trained or selected on). Held-out test =
@@ -72,7 +72,7 @@ Pass the matching stage config so the (Stage-2) LoRA structure is built before t
 `inference.py` restores the connector and (Stage 2) the LoRA adapter automatically.
 
 Rebuild the exact training images from VRSBench with
-`scripts/build_vrsbench_trainset.py --seed 42` — `val.json` / `test.json` here pin the held-out sets.
+`scripts/build_vrsbench_trainset.py --seed 42`; `val.json` / `test.json` here pin the held-out sets.
 
 ## Citation
 
@@ -89,7 +89,7 @@ Rebuild the exact training images from VRSBench with
 
 DOI: [10.57967/hf/9584](https://doi.org/10.57967/hf/9584)
 
-## License — research / non-commercial
+## License: research / non-commercial
 
 The **code** (on GitHub) is MIT, but these **trained weights are not**: they are LoRA-adapted from
 **Qwen2.5-3B-Instruct** and fine-tuned on **VRSBench**, so the checkpoints inherit the most

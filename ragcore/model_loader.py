@@ -3,7 +3,7 @@
 This is a thin wrapper around the existing model so the RAG layer never has to edit
 inference.py. It differs from ``inference.load_vlm`` in two ways needed for evaluation:
 
-* the connector checkpoint is *optional* — the retrieval and prompt-formatting path can
+* the connector checkpoint is *optional*: the retrieval and prompt-formatting path can
   be smoke-tested before any connector has been trained;
 * ``torch_dtype`` / ``device`` can be overridden from the RAG config (e.g. float32 on CPU).
 """
@@ -45,7 +45,7 @@ def load_vlm_from_cfg(cfg: dict):
     else:
         logger.warning(
             "No connector checkpoint loaded (checkpoint=%r). Running with an "
-            "untrained connector — fine for exercising retrieval / prompt formatting, "
+            "untrained connector, fine for exercising retrieval / prompt formatting, "
             "but generated answers will not be meaningful.",
             checkpoint,
         )

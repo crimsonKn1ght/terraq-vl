@@ -8,7 +8,7 @@ contradicts it (the signature of a hallucination).
 Reuses the already-present ``transformers`` library via a text-classification pipeline,
 so no extra dependency is needed. The NLI checkpoint is config-driven; a general MNLI
 model is the default, but a MedNLI/SciNLI-tuned checkpoint should replace it for clinical
-text (negation/hedging) — treat the absolute number as relative-across-modes.
+text (negation/hedging); treat the absolute number as relative-across-modes.
 """
 
 from __future__ import annotations

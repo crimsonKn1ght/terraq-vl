@@ -19,7 +19,7 @@ STAGE="release/stage2"
 
 [ -f "$CKPT/connector.safetensors" ]          || { echo "MISSING: $CKPT/connector.safetensors (training not done?)"; exit 1; }
 [ -f "$CKPT/lora/adapter_model.safetensors" ] || { echo "MISSING: $CKPT/lora/adapter_model.safetensors (LoRA not saved?)"; exit 1; }
-[ -f "$PREDS" ]                               || { echo "MISSING: $PREDS — run held-out inference first:
+[ -f "$PREDS" ]                               || { echo "MISSING: $PREDS - run held-out inference first:
   python scripts/batch_inference.py \\
     --config $CONFIG \\
     --checkpoint $CKPT \\
@@ -39,7 +39,7 @@ cp -r "$CKPT" "$STAGE/"
 cp "$PREDS" "$CONFIG" "$TEST_JSON" "$STAGE/"
 
 cat > "$STAGE/REPRODUCE.md" <<EOF
-# AstraQ-VL Stage-2 — checkpoint-$STEP (final, 1 epoch)
+# AstraQ-VL Stage-2: checkpoint-$STEP (final, 1 epoch)
 
 - Checkpoint: checkpoint-$STEP (train loss $loss)
 - Code: github.com/crimsonKn1ght/astraq-vl @ $COMMIT (branch $BRANCH)
@@ -89,7 +89,7 @@ python inference.py \\
 - test.json          the held-out split (regenerate images via build command above)
 
 Stage-2 improves on Stage-1 by fine-tuning the LLM (LoRA) jointly with the connector on the same
-caption + QA data. Both the connector and LoRA are needed at inference time — pass the Stage-2 config
+caption + QA data. Both the connector and LoRA are needed at inference time; pass the Stage-2 config
 so the LoRA modules are built, then load this checkpoint; inference.py restores both automatically.
 Compare predictions with Stage-1 predictions_test_ep3.jsonl to see the hallucination reduction.
 EOF

@@ -17,7 +17,7 @@ language_model:
   torch_dtype: bfloat16
 connector:
   vision_hidden_size: 1024   # CLIP ViT-L hidden size (D_vision)
-  llm_hidden_size: 2048      # Qwen2.5-3B hidden size (D_llm) — was 1536 for the 1.5B model
+  llm_hidden_size: 2048      # Qwen2.5-3B hidden size (D_llm), was 1536 for the 1.5B model
 data:
   train_data_path: datasets/vrsbench_llava/train.json
   image_dir: datasets/vrsbench_llava/images

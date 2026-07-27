@@ -36,23 +36,23 @@ skeleton, then work the **Porting Checklist (§11)** to decide what to keep vs. 
 ```
 Image (3, 224, 224)
     ↓
-[Vision Encoder — FROZEN]  e.g. CLIP ViT-L/14  → N patch tokens (B, N, D_vision)
+[Vision Encoder: FROZEN]  e.g. CLIP ViT-L/14  → N patch tokens (B, N, D_vision)
     ↓
-[MLP Connector — TRAINABLE] Linear→GELU→Linear → (B, N, D_llm)
+[MLP Connector: TRAINABLE] Linear→GELU→Linear → (B, N, D_llm)
     ↓ (spliced in at the <image> token position, concatenated with)
 Text token embeddings (B, T, D_llm) from the LLM's own embedding table
     ↓
-[LLM — FROZEN (Stage 1) / FROZEN + LoRA (Stage 2)]  → next-token loss
+[LLM: FROZEN (Stage 1) / FROZEN + LoRA (Stage 2)]  → next-token loss
 ```
 
 **Training objective:** plain next-token prediction on image–text pairs. The visual token positions
 are masked out of the loss (`label = -100`); only the assistant's text tokens produce gradients.
 
 **Why this design:**
-- **Simplicity** — no Q-Former, no cross-attention. Just a linear projection with a GELU.
-- **Efficiency** — vision encoder + LLM are frozen; you train ~4M connector params (Stage 1) or
+- **Simplicity**: no Q-Former, no cross-attention. Just a linear projection with a GELU.
+- **Efficiency**: vision encoder + LLM are frozen; you train ~4M connector params (Stage 1) or
   ~22M connector+LoRA params (Stage 2), not billions.
-- **Proven** — this is the LLaVA alignment recipe.
+- **Proven**: this is the LLaVA alignment recipe.
 
 **Two stages:**
 - **Stage 1 (alignment):** train **only** the connector to map frozen vision features into the
@@ -82,7 +82,7 @@ consistently everywhere (config + connector dims are the only hard couplings):
 | Loss-ignore index | `-100` | `vlm_model/utils.py` | keep (PyTorch convention) |
 | Trainable params | ~3.9M (Stage 1) / ~22.4M (Stage 2) | connector (+LoRA) | informational |
 
-**Constants file** (`vlm_model/utils.py`) — copy verbatim:
+**Constants file** (`vlm_model/utils.py`), copy verbatim:
 
 ```python
 import torch
@@ -110,13 +110,13 @@ def count_total_parameters(model: nn.Module) -> int:
 
 ## 3. The critical mechanism: splicing image embeddings
 
-This is the heart of the whole system — the one function to understand deeply. It builds
+This is the heart of the whole system: the one function to understand deeply. It builds
 `inputs_embeds` by replacing the single `<image>` token with the `N` projected visual embeddings,
 and masks those positions out of the loss.
 
 ### 3a. The three sub-modules
 
-**Vision encoder** (`vlm_model/vision_encoder.py`) — frozen; returns patch features, drops CLS:
+**Vision encoder** (`vlm_model/vision_encoder.py`), frozen; returns patch features, drops CLS:
 
 ```python
 import torch
@@ -151,11 +151,11 @@ class VisionEncoder(nn.Module):
         return features
 ```
 
-> **Note:** `select_layer=-2` (penultimate hidden state) is the LLaVA convention — the last layer is
+> **Note:** `select_layer=-2` (penultimate hidden state) is the LLaVA convention: the last layer is
 > too specialized for CLIP's contrastive objective. Keep this even when swapping encoders that expose
 > `output_hidden_states`.
 
-**Connector** (`vlm_model/connector.py`) — the *only* thing trained in Stage 1:
+**Connector** (`vlm_model/connector.py`), the *only* thing trained in Stage 1:
 
 ```python
 import torch.nn as nn
@@ -173,14 +173,14 @@ class VisionLanguageConnector(nn.Module):
         return self.mlp(vision_features)
 ```
 
-**Language model** (`vlm_model/language_model.py`) — frozen base; adds the `<image>` token; optional
+**Language model** (`vlm_model/language_model.py`), frozen base; adds the `<image>` token; optional
 LoRA for Stage 2:
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from .utils import freeze_module, IMAGE_TOKEN
 
-# Qwen2.5 attention + MLP projections — standard LoRA target set. Adjust names for other LLMs.
+# Qwen2.5 attention + MLP projections: standard LoRA target set. Adjust names for other LLMs.
 DEFAULT_LORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj",
                                "gate_proj", "up_proj", "down_proj"]
 
@@ -257,7 +257,7 @@ def prepare_inputs_embeds(self, input_ids, attention_mask, labels, images=None):
 ```
 
 `forward()` and `generate()` both call `prepare_inputs_embeds` first, then pass `inputs_embeds`
-(never `input_ids`) into the LLM. **This is why no model/tokenizer surgery is needed** — the image
+(never `input_ids`) into the LLM. **This is why no model/tokenizer surgery is needed**: the image
 enters purely as embeddings at one token slot.
 
 `enable_gradient_checkpointing()` (Stage 2 only) calls `llm.gradient_checkpointing_enable()` and
@@ -291,7 +291,7 @@ config-proxy case.
 
 `LLaVAPretrainDataset` loads the JSON, and for each item preprocesses the image (§4d) and tokenizes
 the conversation (§4c). It has a **robustness feature worth keeping**: on a failed sample it tries
-the next up-to-10 indices, and finally falls back to a dummy sample — so one corrupt image never
+the next up-to-10 indices, and finally falls back to a dummy sample, so one corrupt image never
 kills a training run.
 
 ### 4c. Conversation tokenization + label masking (`data/conversation.py`)
@@ -341,12 +341,12 @@ def load_and_process_image(image_path, image_processor):
 ### 4e. Collator (`data/collator.py`)
 
 Right-pads `input_ids` (with `pad_token_id`) and `labels` (with `-100`), builds the `attention_mask`,
-and stacks images into `(B, 3, 224, 224)`. Caps at `max_length`. Straightforward — copy as-is.
+and stacks images into `(B, 3, 224, 224)`. Caps at `max_length`. Straightforward: copy as-is.
 
-### 4f. Dataset builder (`scripts/build_astrollava_trainset.py` — pattern to imitate)
+### 4f. Dataset builder (`scripts/build_astrollava_trainset.py`, pattern to imitate)
 
 Streams a HuggingFace dataset → emits `train.json` + `images/`. Reusable ideas:
-- **Per-image, seeded train/test split** (`--test-fraction`, `--seed`) — route an image *and all its
+- **Per-image, seeded train/test split** (`--test-fraction`, `--seed`): route an image *and all its
   records* to one side so captions/QA never leak across the split.
 - **Two record types:** caption pairs (rotate through several prompt phrasings) and flattened
   single-turn QA (`--include-qa`).
@@ -378,7 +378,7 @@ if config.get("stage1_checkpoint"):
 if config["training"].get("gradient_checkpointing", False):
     model.enable_gradient_checkpointing()
 
-# log every trainable tensor by name+shape — a fast sanity check on what's frozen
+# log every trainable tensor by name+shape: a fast sanity check on what's frozen
 for name, param in model.named_parameters():
     if param.requires_grad:
         logger.info(f"  [TRAINABLE] {name}: {param.shape}")
@@ -389,7 +389,7 @@ dataset = LLaVAPretrainDataset(data_cfg["train_data_path"], data_cfg["image_dir"
 VLMTrainer(model, dataset, config, accelerator).train()
 ```
 
-### 5b. Trainer loop (`training/trainer.py`) — key decisions
+### 5b. Trainer loop (`training/trainer.py`): key decisions
 
 - **Optimizer:** `AdamW(betas=(0.9, 0.999), weight_decay=cfg)`. Optional **split LR**: give the
   warm-started connector its own (lower) LR than fresh LoRA via `connector_lr`.
@@ -405,25 +405,25 @@ def lr_lambda(step):
 
 - **Eval modes:** vision encoder always `.eval()`. LLM `.eval()` in Stage 1, but `.train()` in
   Stage 2 (so LoRA dropout is active).
-- **Gradient-flow assertion** (do this once, *before* `zero_grad`) — catches a silently detached
+- **Gradient-flow assertion** (do this once, *before* `zero_grad`): catches a silently detached
   image path, the most common wiring bug:
 
 ```python
 assert any(p.grad is not None for p in unwrapped.connector.parameters()), \
-    "Connector received no gradient — the image-embedding merge path is detached from the loss."
+    "Connector received no gradient: the image-embedding merge path is detached from the loss."
 if is_lora:
     assert any(p.grad is not None for p in lora_params), \
-        "No LoRA parameter received gradient — the LLM adapters are detached from the loss."
+        "No LoRA parameter received gradient: the LLM adapters are detached from the loss."
 ```
 
 - **Grad clipping:** `clip_grad_norm_(trainable, max_grad_norm=1.0)`.
-- **Accumulation:** `with accelerator.accumulate(model):` — effective batch =
+- **Accumulation:** `with accelerator.accumulate(model):`, effective batch =
   `per_device_batch_size × gradient_accumulation_steps × num_processes`.
 - **Logging:** loss / LR / samples-per-sec every `logging_steps`.
 
 ### 5c. Checkpoint format (`training/checkpoint.py`)
 
-Deliberately **not** a full `transformers` model — only the trained deltas:
+Deliberately **not** a full `transformers` model, only the trained deltas:
 
 ```
 checkpoint-<step>/
@@ -460,7 +460,7 @@ checkpoint-<step>/
 Everything is config-driven; the model reads `config["vision_encoder"|"language_model"|"connector"
 |"data"|"training"]`. Copy and edit these two files.
 
-**Stage 1 — `configs/pretrain_stage1.yaml`:**
+**Stage 1 (`configs/pretrain_stage1.yaml`):**
 
 ```yaml
 vision_encoder:
@@ -493,7 +493,7 @@ training:
   seed: 42
 ```
 
-**Stage 2 — `configs/finetune_..._stage2.yaml`** (adds the `lora` block, `stage1_checkpoint`, and
+**Stage 2 (`configs/finetune_..._stage2.yaml`)** (adds the `lora` block, `stage1_checkpoint`, and
 `training.stage: 2`):
 
 ```yaml
@@ -575,7 +575,7 @@ def run_inference(model, image_path, prompt, max_new_tokens=256, temperature=0.7
 ```
 
 Loading restores the connector and (if the config has a `lora` block) the LoRA adapter from the
-checkpoint dir — Stage-1 checkpoints simply skip the LoRA load. Use `--temperature 0` for
+checkpoint dir: Stage-1 checkpoints simply skip the LoRA load. Use `--temperature 0` for
 deterministic/reproducible outputs.
 
 ---
@@ -585,7 +585,7 @@ deterministic/reproducible outputs.
 An **inference-time** retrieval layer that reduces hallucination *without any retraining*. It
 retrieves reference image–report pairs, formats them into a text block, and **prepends that block
 after the `<image>` token and before the question**. Because `<image>` stays first,
-`prepare_inputs_embeds` is untouched — the model, tokenizer, and connector are all unchanged.
+`prepare_inputs_embeds` is untouched: the model, tokenizer, and connector are all unchanged.
 
 ```
 image ─► <image> token ─► [retrieved reference block] ─► question ─► model.generate
@@ -637,7 +637,7 @@ Run: `python run_rag.py --config configs/rag_eval_<domain>.yaml` (add `--synthet
 no-download CPU smoke test). Outputs `results_<mode>.json` + `comparison.md` per mode.
 
 > **Caveat:** RAG only yields meaningful numbers with a **trained connector** (`model.checkpoint`
-> set). With a null checkpoint the pipeline runs end-to-end but generations are random — useful only
+> set). With a null checkpoint the pipeline runs end-to-end but generations are random, useful only
 > to validate wiring.
 
 ---
@@ -655,12 +655,12 @@ The metric set (`scripts/score_predictions.py`, `eval/metrics_nli.py`):
 | NLI consistency | `P(entail) − P(contradict)` via an MNLI classifier, in [-1,1] | ↑ |
 | Contradiction rate | fraction of predictions that outright contradict the reference | ↓ |
 | SBERT cosine | semantic similarity of prediction vs reference | ↑ |
-| **Specificity hallucination** | **domain-specific — see below** | ↓ |
+| **Specificity hallucination** | **domain-specific: see below** | ↓ |
 
 ### The specificity-hallucination metric (a transferable idea)
 
 Reusable recipe for "does the model invent precise facts it can't support?":
-1. **Regex-extract "specifics"** from both prediction and reference — in astronomy: catalog numbers
+1. **Regex-extract "specifics"** from both prediction and reference, in astronomy: catalog numbers
    (`NGC 1234`, `M31`), instrument names (Hubble/JWST/ALMA…), measurements (light-years, parsecs,
    Kelvin, magnitude), redshift (`z = 0.5`), years.
 2. **Unsupported specifics** = `specifics(prediction) − specifics(reference)`.
@@ -672,7 +672,7 @@ etc.) with your domain's precise-fact patterns (gene names, part numbers, drug d
 Everything else in `specificity_row()` / `aggregate_specificity()` is domain-agnostic.
 
 Also swap the NLI model (`roberta-large-mnli` default) for a domain-tuned checkpoint (MedNLI/SciNLI)
-and read NLI numbers as *relative-across-models*, not absolute — general MNLI mishandles domain
+and read NLI numbers as *relative-across-models*, not absolute; general MNLI mishandles domain
 negation/hedging.
 
 Reporting rigor worth copying: **paired bootstrap confidence intervals** across common records
@@ -719,11 +719,11 @@ rank-bm25>=0.2.2
 
 ### Keep **unchanged** (the reusable core)
 
-- [ ] `vlm_model/connector.py` — MLP connector (dims come from config)
-- [ ] `vlm_model/vlm.py` — `prepare_inputs_embeds` splice + masking (the crown jewel)
-- [ ] `vlm_model/utils.py` — constants + freeze helpers
-- [ ] `data/dataset.py`, `data/collator.py` — dataset + collation
-- [ ] `data/conversation.py` — label masking (only swap the chat-template strings)
+- [ ] `vlm_model/connector.py`: MLP connector (dims come from config)
+- [ ] `vlm_model/vlm.py`: `prepare_inputs_embeds` splice + masking (the crown jewel)
+- [ ] `vlm_model/utils.py`: constants + freeze helpers
+- [ ] `data/dataset.py`, `data/collator.py`: dataset + collation
+- [ ] `data/conversation.py`: label masking (only swap the chat-template strings)
 - [ ] `training/trainer.py`, `training/lr_scheduler.py`, `training/checkpoint.py`
 - [ ] `train.py`, `inference.py`
 - [ ] The entire RAG core (`ragcore/`, `retrieval/`, `eval/runner.py`, `eval/ablation.py`)
@@ -735,10 +735,10 @@ rank-bm25>=0.2.2
       (AstroCLIP, BiomedCLIP, a custom encoder) is *not* a drop-in `CLIPVisionModel`, changes
       `D_vision` (→ connector input dim), and **requires retraining the connector from scratch**.
       Standard CLIP on RGB is fine only for a prototype.
-- [ ] **`data/image_processing.py`** — domain image loading (FITS, DICOM, multi-band, dynamic range).
+- [ ] **`data/image_processing.py`**: domain image loading (FITS, DICOM, multi-band, dynamic range).
 - [ ] **LLM** (config `language_model.model_name`) + LoRA `target_modules` (names differ per LLM) +
       the chat-template strings in `data/conversation.py` and `inference.py`.
-- [ ] **Dataset builder** — imitate `scripts/build_astrollava_trainset.py` for your source; keep the
+- [ ] **Dataset builder**: imitate `scripts/build_astrollava_trainset.py` for your source; keep the
       seeded per-image split.
 - [ ] **RAG:** a new `CorpusLoader` adapter + a benchmark builder + `retrieval.text_encoder_id` +
       the `prompt:` wording block.
@@ -762,23 +762,23 @@ rank-bm25>=0.2.2
   `torch.autocast(dtype=torch.bfloat16)` or it errors.
 - **Gradient checkpointing ⊥ KV cache.** `enable_gradient_checkpointing()` must also set
   `config.use_cache = False`. For a `PeftModel`, read the config via the base-model proxy.
-- **The connector must receive gradient.** Assert it once per run (§5b) — a detached image path
+- **The connector must receive gradient.** Assert it once per run (§5b): a detached image path
   trains silently to nothing. `encode_images` runs the vision tower under `no_grad` but the connector
   *outside* it, so `inputs_embeds` requires grad and checkpointing works without
   `enable_input_require_grads`.
-- **Mask visual tokens from the loss** (`label = -100` for the N patch positions) — otherwise the
+- **Mask visual tokens from the loss** (`label = -100` for the N patch positions): otherwise the
   model tries to "predict" image embeddings and loss goes NaN.
 - **Per-image (not per-record) train/test split.** Keep an image's caption and all its QA on the same
   side, or you leak and overstate held-out gains.
 - **`max_length` drives memory more than batch.** The large-vocab fp32 loss OOMs at long sequences;
   512 (+256 image tokens ≈ 768 effective) is a safe default. Prefer shrinking `max_length` or batch
   over disabling bf16.
-- **Decompression-bomb guard** hard-errors mid-stream on huge (100+ MP) frames — set
+- **Decompression-bomb guard** hard-errors mid-stream on huge (100+ MP) frames: set
   `PILImage.MAX_IMAGE_PIXELS = None` for trusted data and cap with `img.thumbnail(...)`.
 - **`datasets` streaming finalizer** can throw on interpreter shutdown and return a false failure to
   shell scripts; `os._exit(0)` after flushing sidesteps it.
 - **Checkpoints are deltas, not models.** They need this repo's code + the two base models (+`peft`
-  for Stage 2) to run — they are *not* standalone `transformers` checkpoints. Ship a `REPRODUCE.md`
+  for Stage 2) to run; they are *not* standalone `transformers` checkpoints. Ship a `REPRODUCE.md`
   pinning the code commit, base-model ids, data-build command (with seed), and package versions.
 - **LoRA / no-LoRA share one load path.** `load_lora_adapter()` is a no-op when there's no `lora/`
   subdir, so Stage-1 and Stage-2 checkpoints load through identical code.

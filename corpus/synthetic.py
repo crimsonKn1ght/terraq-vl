@@ -1,7 +1,7 @@
 """Synthetic image-report corpus for dependency-light smoke tests.
 
 Generates a handful of distinct procedurally-drawn images plus templated chest-x-ray-like
-reports. No downloads, no PHI — lets the full build_index -> retrieve -> evaluate path run
+reports. No downloads, no PHI: lets the full build_index -> retrieve -> evaluate path run
 end-to-end before any real dataset is wired up.
 """
 

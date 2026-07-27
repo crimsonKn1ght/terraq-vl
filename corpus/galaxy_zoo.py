@@ -2,7 +2,7 @@
 
 Verified dataset: ``matthieulel/galaxy10_decals`` (splits train/test; columns ``image`` PNG,
 ``label`` int 0-9). The dataset has no free-text reports, so a descriptive "report" is
-synthesized from the morphology class — enough text for the SBERT / BM25 / cross-encoder
+synthesized from the morphology class: enough text for the SBERT / BM25 / cross-encoder
 retrieval signals. This mirrors how the medical adapters expose image-report pairs, so the
 rest of the pipeline is unchanged.
 

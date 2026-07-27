@@ -1,17 +1,17 @@
 """Build an astronomy training set (LLaVA format) from AstroLLaVA_convos.
 
 ``UniverseTBD/AstroLLaVA_convos`` (CC-BY-SA-4.0) is the training set behind the AstroLLaVA
-paper (arXiv:2504.08583) — ~29.8k real astronomy images (NASA APOD / ESO / Hubble) with a
+paper (arXiv:2504.08583): ~29.8k real astronomy images (NASA APOD / ESO / Hubble) with a
 human-written ``caption`` and a multi-turn ``conversation``. This script materializes the
 images and emits the ``train.json`` + ``images/`` layout that ``data/dataset.py`` /
 ``train.py`` expect.
 
 Two record types are produced:
   * caption pairs (default, always on): human asks to describe, assistant answers with the
-    human-written caption — clean image->text alignment.
+    human-written caption: clean image->text alignment.
   * QA pairs (``--include-qa``): each (human, assistant) turn of the conversation becomes its
     own single-turn record, because this repo's tokenizer (data/conversation.py) keeps only
-    the last turn — so multi-turn convos must be flattened to single turns.
+    the last turn, so multi-turn convos must be flattened to single turns.
 
 The dataset's ``conversation`` is a dict-of-lists ({"from": [...], "value": [...]}) whose
 assistant role is "astrollava"; both are normalized to the repo's
@@ -146,7 +146,7 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Of the HELD-OUT images (see --test-fraction), route this fraction to a disjoint "
         "validation split (val.json); the rest go to test.json. Carved from the held-out pool with a "
-        "separate seeded RNG, so the train/held-out partition is IDENTICAL to a test-only build — "
+        "separate seeded RNG, so the train/held-out partition is IDENTICAL to a test-only build; "
         "adding validation only re-partitions the held-out test, never the training data. 0.0 = none.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Seed for prompt selection / split.")
@@ -173,7 +173,7 @@ def main() -> None:
     rng = random.Random(args.seed)
     split_rng = random.Random(f"{args.seed}-test-split")
     # Separate stream for the val/test sub-split so the train vs. held-out decision is unaffected by
-    # --val-fraction — the training set stays byte-identical to a test-only build.
+    # --val-fraction; the training set stays byte-identical to a test-only build.
     val_rng = random.Random(f"{args.seed}-val-split")
 
     output_dir = Path(args.output_dir).resolve()

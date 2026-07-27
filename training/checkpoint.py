@@ -1,4 +1,4 @@
-"""Save/load the trainable deltas — the connector (both stages) and the LoRA adapter (Stage 2)."""
+"""Save/load the trainable deltas: the connector (both stages) and the LoRA adapter (Stage 2)."""
 
 import json
 import os

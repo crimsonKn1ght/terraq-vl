@@ -3,7 +3,7 @@
 Wires a frozen vision encoder, a trainable MLP connector, and an (optionally LoRA-adapted) causal
 LLM into one module. The core is ``prepare_inputs_embeds``, which swaps the single ``<image>``
 placeholder token for the projected visual patch embeddings so the LLM consumes image and text as
-one embedding sequence — no model or tokenizer surgery required.
+one embedding sequence; no model or tokenizer surgery required.
 """
 
 from typing import Optional, Tuple
