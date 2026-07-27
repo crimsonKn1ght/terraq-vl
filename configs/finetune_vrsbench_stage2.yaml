@@ -21,7 +21,7 @@ language_model:
     r: 16
     lora_alpha: 32
     lora_dropout: 0.05
-    # Qwen2.5 attention + MLP projections (unchanged from the 1.5B model — same architecture family).
+    # Qwen2.5 attention + MLP projections (unchanged from the 1.5B model, same architecture family).
     target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
 connector:
   vision_hidden_size: 1024
@@ -41,7 +41,7 @@ training:
   per_device_batch_size: 8   # tuned for a 96 GB card (RTX PRO 6000); drop to 4 on 48 GB (L40S), 2 on 24 GB
   gradient_accumulation_steps: 8   # keep batch*accum = 64 (effective batch unchanged -> same LR schedule)
   gradient_checkpointing: true     # keep on to fit the 3B backward; set false for more speed if VRAM allows
-  learning_rate: 0.0002      # LoRA + connector (tuned for effective batch 64 — rescale if you change it)
+  learning_rate: 0.0002      # LoRA + connector (tuned for effective batch 64; rescale if you change it)
   # connector_lr: 0.00005    # (optional) give the pretrained connector a lower LR than fresh LoRA
   warmup_ratio: 0.03
   weight_decay: 0.0

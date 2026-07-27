@@ -89,7 +89,7 @@ def parse_meta_dir(meta_dir: str) -> list:
 
 def write_outputs(rows: list, out_stem: str) -> None:
     if not rows:
-        raise SystemExit("No metric rows parsed — is this the trainer's stdout log?")
+        raise SystemExit("No metric rows parsed: is this the trainer's stdout log?")
 
     fields = list(rows[0].keys())
     csv_path = Path(f"{out_stem}.csv")
@@ -128,7 +128,7 @@ def plot(rows: list, out_stem: str, title: str = "Training loss") -> None:
         matplotlib.use("Agg")  # headless (works on a pod with no display)
         import matplotlib.pyplot as plt
     except ImportError:
-        print("\nmatplotlib not installed — skipping PNG (CSV/JSON still written). "
+        print("\nmatplotlib not installed, skipping PNG (CSV/JSON still written). "
               "`pip install matplotlib` to enable.", file=sys.stderr)
         return
 

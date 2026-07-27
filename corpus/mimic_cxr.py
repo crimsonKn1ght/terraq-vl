@@ -1,4 +1,4 @@
-"""MIMIC-CXR adapter — credentialed stub (PhysioNet access required).
+"""MIMIC-CXR adapter, credentialed stub (PhysioNet access required).
 
 This is the dataset named in the research statement. It requires a signed PhysioNet
 data-use agreement, so it cannot be auto-downloaded. The class shape and the config keys

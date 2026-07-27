@@ -100,12 +100,12 @@ def main():
     # Optional held-out validation set. When data.val_data_path is given (e.g. the disjoint test.json
     # emitted by the builders' --test-fraction), the trainer computes a held-out loss every eval_steps
     # so overfitting / under-training is visible during the run. A missing file is a warning, not a
-    # crash — a long run should never abort over a stale val path.
+    # crash; a long run should never abort over a stale val path.
     val_dataset = None
     val_data_path = data_cfg.get("val_data_path")
     if val_data_path and not os.path.exists(val_data_path):
         logger.warning(
-            f"val_data_path is set to '{val_data_path}' but the file does not exist — continuing "
+            f"val_data_path is set to '{val_data_path}' but the file does not exist; continuing "
             "WITHOUT validation loss. Build a held-out split (builders support --test-fraction) or "
             "fix the path to enable it."
         )

@@ -1,11 +1,11 @@
 # Training the remote-sensing VLM (TerraQ-VL) on RunPod
 
-This trains the **MLP connector** (Stage 1) — and optionally the LLM's **LoRA adapters** (Stage 2) —
+This trains the **MLP connector** (Stage 1), and optionally the LLM's **LoRA adapters** (Stage 2),
 to align remote-sensing images with text, using **VRSBench** (~29.6k aerial/satellite images with
 human-verified captions + VQA pairs, from DOTA-v2 / DIOR via GoogleEarth). CLIP stays frozen; the LLM
 is **Qwen2.5-3B-Instruct** (frozen in Stage 1, LoRA-tuned in Stage 2).
 
-> The original astronomy path (AstroLLaVA + Qwen2.5-1.5B) still ships as the backbone — build with
+> The original astronomy path (AstroLLaVA + Qwen2.5-1.5B) still ships as the backbone: build with
 > `scripts/build_astrollava_trainset.py` and train a `configs/*astraq*.yaml` config instead.
 
 ## 0. Get the code on GitHub
@@ -15,13 +15,13 @@ The repo already lives at `https://github.com/crimsonKn1ght/TerraQ-VL`. On the p
 ## 1. Create the pod
 
 - **Template:** "RunPod PyTorch 2.x" (CUDA + PyTorch preinstalled).
-- **GPU:** Qwen2.5-3B is heavier than the 1.5B backbone. Recommend **≥ 40 GB** — **L40S (48 GB)**,
+- **GPU:** Qwen2.5-3B is heavier than the 1.5B backbone. Recommend **≥ 40 GB**: **L40S (48 GB)**,
   RTX 6000 Ada / A6000 (48 GB), A100 (40/80 GB). The **L40S** (Ada, 48 GB) is a great fit and runs the
-  default configs comfortably — you can even raise Stage-1 `per_device_batch_size` to 6–8 for speed. A
+  default configs comfortably; you can even raise Stage-1 `per_device_batch_size` to 6–8 for speed. A
   **24 GB** card (RTX 3090 / 4090) can still do **Stage 1** if you drop `per_device_batch_size` to 2 in
   `configs/pretrain_vrsbench.yaml` (and raise `gradient_accumulation_steps` to keep the effective batch
-  at 128). Training defaults to **bf16**, so use an **Ampere-or-newer** GPU — **avoid T4 and V100**.
-- **Disk / Volume (important):** the small **container disk (e.g. 30 GB) is not enough** — the base
+  at 128). Training defaults to **bf16**, so use an **Ampere-or-newer** GPU; **avoid T4 and V100**.
+- **Disk / Volume (important):** the small **container disk (e.g. 30 GB) is not enough**: the base
   image plus Qwen2.5-3B (~6 GB), CLIP (~1.7 GB) and the ~8.4 GB VRSBench archive overflow it. Create a
   **≥ 50 GB** network/volume disk at pod creation; it mounts at `/workspace`, keeps downloads and
   checkpoints off the container disk, and (for a *network* volume) survives a stop/terminate. Clone the
@@ -54,9 +54,9 @@ held-out test split). `runpod_train.sh` runs `train.py --config configs/pretrain
 > **Download / disk note.** The first `runpod_setup.sh` (smoke or full) downloads `VRSBench_train.json`
 > (~65 MB) and `Images_train.zip` (~8.4 GB) into `HF_HOME`; only referenced images are extracted (as
 > 384 px JPEGs) and the archive is then **deleted** (`--cleanup-zip`) to reclaim ~8 GB, leaving ~10 GB
-> of on-disk data total. Because the zip is removed, a **re-run re-downloads it** — so if disk is tight,
+> of on-disk data total. Because the zip is removed, a **re-run re-downloads it**, so if disk is tight,
 > skip the smoke test and run the full build directly (the builder is already validated). CLIP and
-> Qwen2.5-3B are public weights — no Hugging Face token needed.
+> Qwen2.5-3B are public weights: no Hugging Face token needed.
 
 ## 3. Watch it train
 
@@ -85,7 +85,7 @@ This restores the connector weights, optimizer moments, cosine-LR position, and 
 (e.g. 2300), then trains only the **remaining** steps. Resuming works across a batch-size change **as
 long as the effective batch is unchanged** (batch 4 × accum 32 and batch 8 × accum 16 are both
 effective 128), because the total step count and LR schedule then line up. Note the dataloader
-reshuffles from the start of an epoch rather than resuming mid-epoch — the LR schedule and optimizer
+reshuffles from the start of an epoch rather than resuming mid-epoch; the LR schedule and optimizer
 state are what matter for a clean continuation.
 
 ## 4. Stage 2 (optional): LoRA instruction tuning
@@ -136,10 +136,10 @@ restores both the connector and the LoRA adapter).
 
 - **Prototype-grade vision:** standard CLIP at 224×224 on RGB cutouts. A production remote-sensing VLM
   would swap in an RS-specialized vision tower (which changes the feature dim and **requires retraining
-  the connector**) and handle higher resolution / multi-band inputs — a separate effort.
+  the connector**) and handle higher resolution / multi-band inputs, a separate effort.
 - **Licensing (non-commercial):** VRSBench is **CC-BY-NC-4.0** (images from DOTA-v2 / DIOR) and
   **Qwen2.5-3B-Instruct** is under the **Qwen Research License** (non-commercial). Any weights you train
-  or data you redistribute inherit those terms — keep attribution and cite VRSBench. See the
+  or data you redistribute inherit those terms; keep attribution and cite VRSBench. See the
   **Model & Data Licensing** section in `README.md`.
 - To train on your own data instead, emit the same LLaVA JSON shape (see
   `scripts/build_vrsbench_trainset.py`) and point `data.train_data_path` / `data.image_dir` at it.

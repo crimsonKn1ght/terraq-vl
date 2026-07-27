@@ -30,12 +30,12 @@ jointly with LoRA adapters on the Qwen LLM**, on the caption + GPT-4 QA records 
 The CLIP vision tower stays frozen. Trained on a **disjoint held-out test split** so it can be
 evaluated on unseen images.
 
-Stage 1 aligned the connector with the LLM frozen — it grounds *coarse* visual structure but
+Stage 1 aligned the connector with the LLM frozen: it grounds *coarse* visual structure but
 hallucinates fine specifics. Stage 2 opens up the LLM (via LoRA) so the model learns to *use* the
-visual evidence when committing to answers — the recipe's instruction-tuning step.
+visual evidence when committing to answers, the recipe's instruction-tuning step.
 
 > ⚠️ This bundle ships the **connector + LoRA adapter only** (not full LLM weights). It is **not** a
-> standalone `transformers` model — it needs the custom VLM code from the
+> standalone `transformers` model: it needs the custom VLM code from the
 > [astraq-vl](https://github.com/crimsonKn1ght/astraq-vl) repo, the two base models
 > (auto-downloaded from the Hub), and [`peft`](https://github.com/huggingface/peft) to run.
 
@@ -62,7 +62,7 @@ image ─► CLIP ViT-L/14 (FROZEN) ─► MLP connector (TRAINED, init from Sta
 - **Vision:** `openai/clip-vit-large-patch14`, penultimate-layer patch features (frozen)
 - **Connector:** 2-layer MLP with GELU, 1024→1536→1536; **warm-started from Stage-1 `checkpoint-3789`** and kept trainable
 - **LLM:** `Qwen/Qwen2.5-1.5B-Instruct`, base frozen + **LoRA adapters** (`r=16`, `α=32`, dropout 0.05) on `q/k/v/o/gate/up/down_proj` across all 28 layers
-- **Trainable / total:** 22,400,000 / 1,868,879,360 (1.20%) — connector 3,935,232 + LoRA 18,464,768
+- **Trainable / total:** 22,400,000 / 1,868,879,360 (1.20%): connector 3,935,232 + LoRA 18,464,768
 
 ## Training
 
@@ -77,10 +77,10 @@ image ─► CLIP ViT-L/14 (FROZEN) ─► MLP connector (TRAINED, init from Sta
 | Max length | 512 (+256 image tokens) |
 | Precision | bf16 (autocast) + gradient checkpointing |
 | Hardware | 1× RTX 6000 Ada (48 GB), ~15 samples/s (~3 h) |
-| Held-out loss | 1.60 (step 200) → **1.452** (step 2526), decreasing monotonically — see Training curve below |
+| Held-out loss | 1.60 (step 200) → **1.452** (step 2526), decreasing monotonically; see Training curve below |
 
 The full-LLM backward pass (absent in Stage-1) is the memory driver, hence per-device batch 4 +
-gradient checkpointing to fit ~48 GB. One epoch is the LLaVA instruction-tuning convention — the
+gradient checkpointing to fit ~48 GB. One epoch is the LLaVA instruction-tuning convention: the
 model only needs to learn to *use* the already-aligned visual features, not to align them from
 scratch.
 
@@ -88,7 +88,7 @@ scratch.
 
 Held-out validation loss, recomputed per checkpoint on a fixed 512-sample subset of the unseen
 `test.json` and averaged over its answer tokens. (The per-step training log wasn't retained, so this
-was reconstructed from the saved checkpoints with `scripts/eval_loss_curve.py` — which makes it a
+was reconstructed from the saved checkpoints with `scripts/eval_loss_curve.py`, which makes it a
 true held-out curve rather than a noisy train-loss trace.) It falls monotonically and flattens by the
 end of the single epoch, consistent with the 1-epoch choice:
 
@@ -129,7 +129,7 @@ then restores both the connector and the LoRA automatically. The bundled
 
 ## Capabilities & limitations
 
-Stage 2 fine-tunes the LLM (LoRA) jointly with the connector, so — unlike Stage-1 — the language
+Stage 2 fine-tunes the LLM (LoRA) jointly with the connector, so, unlike Stage-1, the language
 model itself learns from the QA pairs rather than improvising specifics from its frozen prior. The
 intended effect is **fewer hallucinated fine details** (catalog numbers, instruments, dates) on
 question-answering prompts, on top of Stage-1's coarse visual grounding. Compare the bundled
@@ -138,7 +138,7 @@ to see the difference.
 
 Limitations carried over from the design: CLIP's 224×224 input discards fine astronomical detail;
 the base LLM is small (1.5B); and LoRA is a low-rank adaptation, not a full fine-tune. Evaluation is
-a held-out generation set, not a full quantitative benchmark — read results qualitatively.
+a held-out generation set, not a full quantitative benchmark: read results qualitatively.
 
 ## Reproduction
 

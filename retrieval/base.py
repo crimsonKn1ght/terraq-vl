@@ -1,4 +1,4 @@
-"""Retriever interface — the seam that makes the three ablation modes interchangeable.
+"""Retriever interface: the seam that makes the three ablation modes interchangeable.
 
 Every retriever (dense-visual, sparse-BM25, hybrid) returns the same ``RetrievedPair``
 list, so the prompt formatter (``ragcore.context_format``) and the eval runner are

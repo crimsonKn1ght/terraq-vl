@@ -5,7 +5,7 @@
 # once and are cached under ~/.cache/huggingface.
 #
 # IMPORTANT: meaningful generated answers require a TRAINED connector. With checkpoint null
-# the connector is random and EM/NLI will not be meaningful — the run still exercises the
+# the connector is random and EM/NLI will not be meaningful; the run still exercises the
 # whole pipeline end-to-end. Either train the connector first (python train.py ...) and set
 # model.checkpoint below, or swap model.config to a fully-trained medical VLM.
 

@@ -7,7 +7,7 @@ CLI reloads ~5 GB every call). Output is one JSON object per line:
 Pass --records-json datasets/astrollava_llava/test.json to score EXACTLY the held-out test
 images (and attach their reference captions); otherwise it samples from --image-dir.
 
-Usage (from repo root) — held-out test set, all unseen images:
+Usage (from repo root), held-out test set, all unseen images:
     python scripts/batch_inference.py \
         --config configs/pretrain_astraq_vl.yaml \
         --checkpoint checkpoints/astraq-vl-stage1/checkpoint-3786 \

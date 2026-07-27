@@ -7,12 +7,12 @@ question-answer turns. The training split ships as a single LLaVA-format file
 ``VRSBench_train.json`` plus an ``Images_train.zip`` archive.
 
 This script materializes the images and emits the ``train.json`` + ``images/`` layout that
-``data/dataset.py`` / ``train.py`` expect — the same output shape as
+``data/dataset.py`` / ``train.py`` expect, the same output shape as
 ``scripts/build_astrollava_trainset.py`` (the astronomy backbone builder this is modeled on).
 
 VRSBench's training records are one-per-image with a multi-turn ``conversations`` list (a
 caption turn followed by VQA turns). This repo's tokenizer (``data/conversation.py``) keeps
-only the last turn, so multi-turn convos are flattened into single-turn (human, gpt) records —
+only the last turn, so multi-turn convos are flattened into single-turn (human, gpt) records:
 one caption record and one record per VQA turn, all sharing the same image and split bucket.
 
 Run from the repo root:
@@ -37,7 +37,7 @@ Run from the repo root:
 Notes:
 - VRSBench is released for research use; keep its attribution/license if you redistribute.
 - Box coordinates in some VQA answers are normalized to 0-100 (per the VRSBench paper); they are
-  kept verbatim as text — no coordinate handling is needed for caption/VQA text alignment.
+  kept verbatim as text: no coordinate handling is needed for caption/VQA text alignment.
 """
 
 import argparse
@@ -216,7 +216,7 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Of the HELD-OUT images (see --test-fraction), route this fraction to a disjoint "
         "validation split (val.json); the rest go to test.json. Carved from the held-out pool with a "
-        "separate seeded RNG, so the train/held-out partition is IDENTICAL to a test-only build — "
+        "separate seeded RNG, so the train/held-out partition is IDENTICAL to a test-only build; "
         "adding validation only re-partitions the held-out test, it never touches the training data. "
         "e.g. --test-fraction 0.04 --val-fraction 0.5 -> ~2%% val + ~2%% test. 0.0 = no val split.",
     )
@@ -247,7 +247,7 @@ def main() -> None:
     args = parse_args()
     split_rng = Random(f"{args.seed}-test-split")
     # Separate stream for the val/test sub-split so the train vs. held-out decision above is
-    # unaffected by --val-fraction — the training set stays byte-identical to a test-only build.
+    # unaffected by --val-fraction; the training set stays byte-identical to a test-only build.
     val_rng = Random(f"{args.seed}-val-split")
 
     output_dir = Path(args.output_dir).resolve()

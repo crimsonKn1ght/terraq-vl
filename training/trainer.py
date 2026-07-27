@@ -23,8 +23,8 @@ class VLMTrainer:
     Sets up the AdamW optimizer (optionally a split connector/LoRA LR), cosine-warmup schedule,
     gradient accumulation and clipping, periodic logging, and connector(+LoRA) checkpointing.
 
-    The logged training loss is a *token-weighted* running mean, and — when a ``val_dataset`` is
-    given — a held-out validation loss is computed every ``eval_steps`` (same token-weighted method
+    The logged training loss is a *token-weighted* running mean, and, when a ``val_dataset`` is
+    given, a held-out validation loss is computed every ``eval_steps`` (same token-weighted method
     as ``scripts/eval_loss_curve.py``) and written into each checkpoint's ``meta.json``, so overfitting
     (val rising while train falls) and under-training (val still falling) are visible during the run.
     """
@@ -207,7 +207,7 @@ class VLMTrainer:
                                 p.grad is not None
                                 for p in unwrapped.connector.parameters()
                             ), (
-                                "Connector received no gradient before the optimizer step — "
+                                "Connector received no gradient before the optimizer step: "
                                 "the image-embedding merge path is detached from the loss."
                             )
                             if is_lora:
@@ -215,7 +215,7 @@ class VLMTrainer:
                                     p.grad is not None for p in trainable_for_step
                                     if id(p) not in {id(c) for c in unwrapped.connector.parameters()}
                                 ), (
-                                    "No LoRA parameter received gradient — the LLM adapters are "
+                                    "No LoRA parameter received gradient: the LLM adapters are "
                                     "detached from the loss."
                                 )
                             grad_checked = True
@@ -231,7 +231,7 @@ class VLMTrainer:
                 # Token-weight the running loss: each micro-batch's loss is a mean over ITS supervised
                 # tokens, so weighting by that token count (not counting every micro-batch equally)
                 # makes the logged value a true per-token mean. This is what removes the high-frequency
-                # jitter from the curve — a 3-token VQA answer no longer swings the average like a
+                # jitter from the curve: a 3-token VQA answer no longer swings the average like a
                 # 200-token caption. Same weighting scheme as scripts/eval_loss_curve.py.
                 label_tokens = int((batch["labels"] != IGNORE_INDEX).sum().item())
                 running_loss += loss.detach().item() * label_tokens
@@ -332,7 +332,7 @@ class VLMTrainer:
         """Return the token-weighted mean answer-token loss over the held-out loader.
 
         Mirrors scripts/eval_loss_curve.py: each batch's loss (a mean over its supervised tokens) is
-        weighted by that token count, so the aggregate is a true per-token mean — smooth and directly
+        weighted by that token count, so the aggregate is a true per-token mean: smooth and directly
         comparable across evals. Totals are reduced across processes; training mode is restored before
         returning. No backward pass, so eval batches can be as large as the training ones.
         """

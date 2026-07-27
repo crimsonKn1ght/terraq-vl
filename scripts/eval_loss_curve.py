@@ -1,11 +1,11 @@
-"""Recompute a clean loss curve from saved checkpoints — no retraining, no training logs needed.
+"""Recompute a clean loss curve from saved checkpoints: no retraining, no training logs needed.
 
 Each checkpoint's meta.json holds only a single-micro-batch loss (very noisy). This script instead
 loads every checkpoint (connector + LoRA) and computes the teacher-forced **answer-token loss over a
-FIXED set of samples** — the same samples for every checkpoint — so the curve is smooth and directly
+FIXED set of samples** (the same samples for every checkpoint) so the curve is smooth and directly
 comparable across steps. Run on ``val.json`` it reproduces the in-training validation curve offline;
 run on the untouched ``test.json`` it is the final held-out **test** curve (score the test split once,
-at the end — do not use it for checkpoint selection).
+at the end; do not use it for checkpoint selection).
 
 Base models are loaded once; only the connector + LoRA adapter are swapped per checkpoint, so this
 is fast (a forward pass over N samples per checkpoint, no backward).

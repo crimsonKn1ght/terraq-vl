@@ -37,7 +37,7 @@ for ep in 1 2 3; do
   cp "$preds" "$CONFIG" "$TEST_JSON" "$stage/"
 
   cat > "$stage/REPRODUCE.md" <<EOF
-# AstraQ-VL Stage-1 — epoch $ep (checkpoint-$step)
+# AstraQ-VL Stage-1: epoch $ep (checkpoint-$step)
 
 - Checkpoint: checkpoint-$step (epoch $ep representative, train loss $loss)
 - Code: github.com/crimsonKn1ght/astraq-vl @ $COMMIT (branch $BRANCH)
@@ -63,7 +63,7 @@ python scripts/batch_inference.py --config configs/pretrain_astraq_vl.yaml --che
 Epoch checkpoints: ep1 = step ~1300 (~1 epoch), ep2 = step ~2500 (~2 epochs), ep3 = step 3789 (final).
 Predictions are on a TRUE held-out set (these images were excluded from training). The connector
 grounds on coarse visual structure (object class / morphology); fine specifics (catalog numbers,
-instruments, dates) may be hallucinated — the Stage-1 ceiling. On held-out images, qualitative
+instruments, dates) may be hallucinated: the Stage-1 ceiling. On held-out images, qualitative
 caption quality improved ep1 < ep2 < ep3.
 EOF
 

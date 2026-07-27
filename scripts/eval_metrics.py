@@ -4,14 +4,14 @@ Loss/perplexity (see scripts/eval_loss_curve.py; perplexity = exp(loss)) measure
 likelihood. This script instead *generates* an answer for each held-out question and scores it
 against the gold answer several ways:
 
-  - ROUGE-L F1 / token-F1  — lexical overlap with the reference (pure-python, no deps)
-  - Exact match (overall / closed / open)  — reuses eval/metrics_em.py
-  - NLI factual consistency + contradiction rate  — reuses eval/metrics_nli.py (the hallucination
+  - ROUGE-L F1 / token-F1: lexical overlap with the reference (pure-python, no deps)
+  - Exact match (overall / closed / open): reuses eval/metrics_em.py
+  - NLI factual consistency + contradiction rate: reuses eval/metrics_nli.py (the hallucination
     proxy: P(entail) - P(contradict); contradiction_rate is the fraction that outright contradict)
-  - SBERT cosine  — semantic similarity via sentence-transformers (optional; already a dep)
+  - SBERT cosine: semantic similarity via sentence-transformers (optional; already a dep)
 
 Each test.json record is its own (question, gold-answer) pair, so we prompt with the record's actual
-question and compare to its gold answer — a real held-out QA/caption eval.
+question and compare to its gold answer: a real held-out QA/caption eval.
 
 Usage (from repo root, on a GPU):
     python scripts/eval_metrics.py \
@@ -173,7 +173,7 @@ def main() -> None:
             print(f"Scoring NLI factual-consistency with {args.nli_model} ...")
             summary["nli"] = aggregate_nli(per_sample, NLIScorer(args.nli_model, args.device))
             write_out(summary)
-        except Exception as exc:  # noqa: BLE001 — never lose generations to an NLI failure
+        except Exception as exc:  # noqa: BLE001 - never lose generations to an NLI failure
             print(f"NLI scoring failed ({exc}); continuing without it.", file=sys.stderr)
 
     if not args.no_semantic:

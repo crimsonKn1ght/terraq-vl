@@ -5,7 +5,7 @@ REPOPREFIX/<relpath> with a matching byte size, and prints a single OK / NOT‑O
 before terminating a pod, so you know nothing silently failed to upload.
 
     export HF_TOKEN=hf_xxx           # only needed for a private repo
-    # default layout (matches the archival flow) — just pass the repo:
+    # default layout (matches the archival flow), just pass the repo:
     python scripts/verify_hf_upload.py --repo-id grKnight/terraq-vl
     # or spell out pairs explicitly:
     python scripts/verify_hf_upload.py --repo-id grKnight/terraq-vl \
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-# (local dir, repo path prefix) — the standard preserve-everything layout.
+# (local dir, repo path prefix): the standard preserve-everything layout.
 DEFAULT_PAIRS = [
     ("checkpoints/vrsbench-stage1", "stage-1/checkpoints"),
     ("checkpoints/vrsbench-stage2", "stage-2/checkpoints"),
@@ -93,24 +93,24 @@ def main() -> None:
     checked, missing, mismatch, skipped = compare(pairs, remote_sizes, not args.no_size)
 
     for s in skipped:
-        print(f"  (skipped — local dir not found: {s})")
+        print(f"  (skipped, local dir not found: {s})")
     print(f"Checked {checked} local files against {args.repo_id} ({len(remote_sizes)} files on the Hub).")
 
     if not missing and not mismatch:
-        print(f"\n✅ OK — all {checked} files are on the Hub" + ("" if args.no_size else " with matching sizes") + ".")
+        print(f"\n✅ OK: all {checked} files are on the Hub" + ("" if args.no_size else " with matching sizes") + ".")
         sys.exit(0)
 
     if missing:
-        print(f"\n❌ MISSING {len(missing)} file(s) — re-upload these:")
+        print(f"\n❌ MISSING {len(missing)} file(s), re-upload these:")
         for m in missing[:50]:
             print(f"    {m}")
         if len(missing) > 50:
             print(f"    … and {len(missing) - 50} more")
     if mismatch:
-        print(f"\n⚠️  SIZE MISMATCH {len(mismatch)} file(s) (truncated/failed upload — re-upload):")
+        print(f"\n⚠️  SIZE MISMATCH {len(mismatch)} file(s) (truncated/failed upload, re-upload):")
         for path, local_sz, hub_sz in mismatch[:50]:
             print(f"    {path}  local {local_sz} vs hub {hub_sz}")
-    print("\nNOT OK — re-run the matching upload_to_hf.py command(s), then re-check.")
+    print("\nNOT OK: re-run the matching upload_to_hf.py command(s), then re-check.")
     sys.exit(1)
 
 

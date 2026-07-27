@@ -14,7 +14,7 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from .utils import freeze_module, IMAGE_TOKEN
 
-# Qwen2.5 attention + MLP projections — the standard LoRA target set for Stage-2 instruction tuning.
+# Qwen2.5 attention + MLP projections: the standard LoRA target set for Stage-2 instruction tuning.
 DEFAULT_LORA_TARGET_MODULES = [
     "q_proj", "k_proj", "v_proj", "o_proj",
     "gate_proj", "up_proj", "down_proj",
@@ -70,8 +70,8 @@ class LanguageModel(nn.Module):
             bias="none",
         )
         # get_peft_model freezes the base and marks only the adapter weights trainable. The resized
-        # embedding table (for <image>) is not a LoRA target, so it stays frozen — correct, since
-        # <image> positions are swapped for visual embeds and never embedded.
+        # embedding table (for <image>) is not a LoRA target, so it stays frozen (correct, since
+        # <image> positions are swapped for visual embeds and never embedded).
         self.model = get_peft_model(self.model, lora_config)
 
     @property

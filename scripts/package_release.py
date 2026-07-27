@@ -1,15 +1,15 @@
 """Assemble a release bundle (folder + zip) for a trained TerraQ-VL stage.
 
-Collects everything worth keeping for a stage into one tidy, self-describing folder — checkpoints
+Collects everything worth keeping for a stage into one tidy, self-describing folder: checkpoints
 (zipped), the training config, training/validation curves, held-out predictions, the raw log, the
-data splits — plus a generated MODEL_CARD.md and a manifest.json (every file with size + sha256).
+data splits, plus a generated MODEL_CARD.md and a manifest.json (every file with size + sha256).
 The result is what scripts/upload_to_hf.py pushes to the Hub.
 
 This is pure assembly: run inference (scripts/batch_inference.py) and the curve
 (scripts/plot_training_curve.py) FIRST, then point this script at their outputs. Nothing here needs
 a GPU. stdlib + pyyaml only.
 
-Usage (from repo root) — Stage 2, bundling the final and best-val checkpoints:
+Usage (from repo root), Stage 2, bundling the final and best-val checkpoints:
     python scripts/package_release.py --stage 2 \
         --title terraq-vl-stage2 \
         --config configs/finetune_vrsbench_stage2.yaml \
@@ -20,7 +20,7 @@ Usage (from repo root) — Stage 2, bundling the final and best-val checkpoints:
         --predictions predictions_test_stage2.jsonl \
         --data datasets/vrsbench_llava/test.json datasets/vrsbench_llava/val.json
 
-Usage — Stage 1, one per-epoch checkpoint + its held-out predictions each:
+Usage: Stage 1, one per-epoch checkpoint + its held-out predictions each:
     python scripts/package_release.py --stage 1 \
         --title terraq-vl-stage1 \
         --config configs/pretrain_vrsbench.yaml \
@@ -163,17 +163,17 @@ def build_model_card(args, ckpts, cfg, bundle: Path) -> str:
     lines += [
         "",
         "## Contents",
-        "- `checkpoints/` — "
+        "- `checkpoints/`: "
         + ("raw checkpoint dir(s)" if args.no_checkpoint_zip else "zipped checkpoint dir(s)")
         + ": `connector.safetensors`"
         + (" + `lora/` adapter" if args.stage == 2 else "")
         + " + `training_state.pt` + `meta.json`",
-        "- `config/` — the exact training/inference config YAML",
-        "- `curves/` — training + held-out validation loss curve (png/csv/json)",
-        "- `predictions/` — greedy captions on the held-out `test.json` (response + reference)",
-        "- `logs/` — raw training stdout",
-        "- `data/` — the held-out split(s) used (regenerate images with the builder)",
-        "- `manifest.json` — every file with size + sha256",
+        "- `config/`: the exact training/inference config YAML",
+        "- `curves/`: training + held-out validation loss curve (png/csv/json)",
+        "- `predictions/`: greedy captions on the held-out `test.json` (response + reference)",
+        "- `logs/`: raw training stdout",
+        "- `data/`: the held-out split(s) used (regenerate images with the builder)",
+        "- `manifest.json`: every file with size + sha256",
         "",
         "## Inference",
         "```bash",
@@ -209,11 +209,11 @@ def main() -> None:
 
     # Checkpoints -> one zip each (so best-val and final stay separately downloadable). With
     # --no-checkpoint-zip we only validate them (the card still reports each meta.json) and leave the
-    # raw dirs to be uploaded separately — no gigabytes duplicated on disk or on the Hub.
+    # raw dirs to be uploaded separately; no gigabytes duplicated on disk or on the Hub.
     for ckpt in args.checkpoint:
         ckpt_path = Path(ckpt)
         if not (ckpt_path / "connector.safetensors").exists():
-            raise SystemExit(f"MISSING connector.safetensors in {ckpt_path} — is training done / path right?")
+            raise SystemExit(f"MISSING connector.safetensors in {ckpt_path}: is training done / path right?")
         if not args.no_checkpoint_zip:
             zip_dir(ckpt_path, bundle / "checkpoints" / f"{ckpt_path.name}.zip")
 
@@ -250,7 +250,7 @@ def main() -> None:
             )
     (bundle / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
-    # Whole-bundle zip alongside the folder (skipped when checkpoints live outside the bundle —
+    # Whole-bundle zip alongside the folder (skipped when checkpoints live outside the bundle,
     # re-zipping only the light artifacts adds little, and with big checkpoints it would double GBs).
     total_mb = sum(m["bytes"] for m in manifest) / 1e6
     print(f"\nPackaged {len(manifest)} files ({total_mb:.1f} MB) into folder: {bundle}")

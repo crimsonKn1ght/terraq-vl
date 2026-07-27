@@ -27,7 +27,7 @@ stay frozen. This is the **Stage-1 feature-alignment** stage, trained for **3 ep
 with a **disjoint held-out test split** so it can be evaluated on unseen images.
 
 > ⚠️ This repo ships the **connector checkpoint only** (`connector.safetensors`, ~16 MB). It is
-> **not** a standalone `transformers` model — it needs the custom VLM code from the
+> **not** a standalone `transformers` model: it needs the custom VLM code from the
 > [astraq-vl](https://github.com/crimsonKn1ght/astraq-vl) repo plus the two base models
 > (auto-downloaded from the Hub) to run.
 
@@ -100,18 +100,18 @@ The bundled `predictions_test_ep*.jsonl` hold the held-out outputs with their re
 
 ## Capabilities & limitations
 
-**What it does well** — it grounds on *coarse visual structure* (object class / morphology), and
+**What it does well**: it grounds on *coarse visual structure* (object class / morphology), and
 this **generalizes to held-out images**. On unseen test images, quality improved monotonically with
 training: epoch 1 misidentified objects, epoch 2 fixed the object *category*, and epoch 3 recovered
-*specific* objects — e.g. correctly naming **SN 1987A and its ring** and the **Dumbbell Nebula**, on
+*specific* objects, e.g. correctly naming **SN 1987A and its ring** and the **Dumbbell Nebula**, on
 images it never trained on. Because these are held-out, that's genuine generalization, not
 memorization.
 
-**What it doesn't** — it **hallucinates fine details** (exact catalog numbers, telescopes, dates,
+**What it doesn't**: it **hallucinates fine details** (exact catalog numbers, telescopes, dates,
 distances), filling specifics from the frozen LLM's prior rather than the pixels. This is the
 expected Stage-1 ceiling: the connector supplies a coarse visual category and the frozen LLM
 improvises the rest. For factual specificity, a **Stage-2 fine-tune** (unfreezing the LLM via LoRA
-on the QA pairs) is the fix — more Stage-1 epochs do not help. That model is now released at
+on the QA pairs) is the fix; more Stage-1 epochs do not help. That model is now released at
 [`grKnight/astraq-vl-stage2`](https://huggingface.co/grKnight/astraq-vl-stage2).
 
 The held-out comparison above is a **qualitative spot check** on a few samples, not a full

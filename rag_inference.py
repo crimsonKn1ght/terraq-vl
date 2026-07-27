@@ -1,4 +1,4 @@
-"""Retrieval-augmented inference — the RAG twin of ``inference.run_inference``.
+"""Retrieval-augmented inference: the RAG twin of ``inference.run_inference``.
 
 Flow: retrieve top-k image-report pairs -> format them into a structured context block
 -> prepend after the <image> token -> call the existing ``model.generate``. No model,

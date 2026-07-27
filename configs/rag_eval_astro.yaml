@@ -1,4 +1,4 @@
-# Astronomy variant of the RAG ablation — same pipeline, different domain.
+# Astronomy variant of the RAG ablation: same pipeline, different domain.
 #
 # Shows the pipeline is domain-agnostic: only the corpus, benchmark, retrieval text encoder,
 # and the prompt wording change. The retrieval machinery, ablation driver, eval runner, and
