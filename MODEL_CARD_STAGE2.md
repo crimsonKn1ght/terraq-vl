@@ -140,6 +140,44 @@ Limitations carried over from the design: CLIP's 224×224 input discards fine as
 the base LLM is small (1.5B); and LoRA is a low-rank adaptation, not a full fine-tune. Evaluation is
 a held-out generation set, not a full quantitative benchmark: read results qualitatively.
 
+## Full held-out evaluation (preprint)
+
+Run the full held-out benchmark (all 3,271 caption + QA records) with:
+
+```bash
+python scripts/run_full_heldout_eval.py --stage stage2 --num-samples 0 --resume --package
+```
+
+This scores all held-out records with one shared pipeline: ROUGE-L, token-F1, exact match,
+specificity hallucination, unsupported specifics, SBERT, NLI consistency, and contradiction rate.
+See `docs/full_heldout_eval.md`, `docs/qwen_vl_full_heldout_baseline.md`, and
+`docs/astrollava_reference_full_heldout_baseline.md` for the full write-up.
+
+Overall held-out comparison:
+
+| Model | n | ROUGE-L up | Token-F1 up | Exact match up | Specificity halluc. down | Pred. specifics / rec. | Unsupported / rec. down | Spec. precision up | SBERT up | NLI up | Contradiction down |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Stage-1 epoch 3 | 3271 | 0.3116 | 0.3672 | 0.0272 | 0.2372 | 0.4632 | 0.3733 | 0.1941 | 0.7150 | -0.1084 | 0.5671 |
+| Stage-2 | 3271 | **0.3404** | **0.3948** | **0.0339** | 0.2284 | 0.4405 | 0.3369 | **0.2353** | **0.7313** | -0.0795 | 0.5436 |
+| Qwen2.5-VL-7B | 3271 | 0.1610 | 0.2156 | 0.0003 | 0.2727 | 0.5812 | 0.4946 | 0.1489 | 0.6224 | **0.0281** | **0.1764** |
+| AstroLLaVA reference | 3240 | 0.1759 | 0.1993 | 0.0000 | **0.1722** | 0.2423 | **0.2207** | 0.0892 | 0.4656 | 0.0101 | 0.5836 |
+
+The current result story is deliberately nuanced: Stage-2 improves in-domain held-out reference
+alignment and reduces unsupported specifics compared with Stage-1, while Qwen2.5-VL is much less
+contradictory under the NLI proxy. The unsupported-specific gain is not just a "says less" result:
+Stage-2 emits slightly fewer detected specifics than Stage-1 (0.4405 vs 0.4632 per record), but its
+reference-supported specificity precision proxy rises from 0.1941 to 0.2353. AstroLLaVA reference is
+included as a domain comparator, but it has possible data-lineage overlap and 31 unscored rows that
+should be inspected before final paper claims.
+
+The release ZIPs used for the table are committed under `eval_runs/full_heldout/` with checksums in
+`eval_runs/full_heldout/SHA256SUMS.txt`. Each ZIP contains the held-out `test.json`, predictions,
+aggregate metrics, per-sample metrics, and reproduction notes for that model family.
+
+For preprint-strength analysis, run the offline workflow in `docs/preprint_offline_analysis.md`:
+paired bootstrap confidence intervals, AstroLLaVA skipped-row inspection, honestly mined
+qualitative examples, and a 100-200 item human/LLM judge sample.
+
 ## Reproduction
 
 The bundle's `REPRODUCE.md` pins the exact code commit, base models, the seeded dataset-build
